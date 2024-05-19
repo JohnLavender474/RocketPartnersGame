@@ -1,5 +1,6 @@
 package com.rocketpartners.game;
 
+import com.badlogic.gdx.Gdx;
 import com.badlogic.gdx.assets.AssetManager;
 import com.badlogic.gdx.graphics.g2d.Batch;
 import com.badlogic.gdx.graphics.g2d.SpriteBatch;
@@ -15,7 +16,6 @@ import com.engine.GameEngine;
 import com.engine.IGameEngine;
 import com.engine.animations.AnimationsSystem;
 import com.engine.audio.AudioSystem;
-import com.engine.audio.IAudioManager;
 import com.engine.behaviors.BehaviorsSystem;
 import com.engine.common.extensions.ObjectSetExtensionsKt;
 import com.engine.common.objects.MultiCollectionIterable;
@@ -37,14 +37,21 @@ import com.engine.graph.IGraphMap;
 import com.engine.pathfinding.Pathfinder;
 import com.engine.pathfinding.PathfindingSystem;
 import com.engine.points.PointsSystem;
+import com.engine.screens.IScreen;
+import com.engine.systems.IGameSystem;
 import com.engine.updatables.UpdatablesSystem;
 import com.engine.world.WorldSystem;
 import com.rocketpartners.game.assets.IAsset;
 import com.rocketpartners.game.assets.MusicAsset;
 import com.rocketpartners.game.assets.SoundAsset;
 import com.rocketpartners.game.assets.TextureAsset;
+import com.rocketpartners.game.audio.AudioManager;
 import com.rocketpartners.game.controllers.ControllerUtils;
+import com.rocketpartners.game.entities.Player;
 import com.rocketpartners.game.events.EventType;
+import com.rocketpartners.game.screens.ScreenEnum;
+import com.rocketpartners.game.screens.levels.LevelEnum;
+import com.rocketpartners.game.screens.levels.LevelScreen;
 import com.rocketpartners.game.world.CollisionHandler;
 import com.rocketpartners.game.world.ContactListener;
 import com.rocketpartners.game.world.FixtureType;
@@ -70,10 +77,12 @@ public final class RocketPartnersGame extends Game2D implements IEventListener {
     private IGameEngine engine;
     private ObjectSet<Object> eventKeyMask;
     private Stage uiStage;
-    private IAudioManager audioMan;
+    private AudioManager audioMan;
     private IGraphMap graphMap;
     private ObjectMap<DrawingSection, PriorityQueue<IComparableDrawable<Batch>>> drawables;
     private PriorityQueue<IDrawableShape> shapes;
+    private Player player;
+    private ObjectMap<String, IGameSystem> systemsMap;
 
     public void create() {
         shapeRenderer = new ShapeRenderer();
@@ -103,6 +112,19 @@ public final class RocketPartnersGame extends Game2D implements IEventListener {
         shapes = new PriorityQueue<>(Comparator.comparingInt(o -> o.getShapeType().ordinal()));
 
         engine = createEngine(this);
+        systemsMap = new ObjectMap<>();
+        engine.getSystems().forEach(system -> systemsMap.put(system.getClass().getSimpleName(), system));
+
+        player = new Player(this);
+        player.init();
+        player.setInitialized(true);
+
+        // TODO: add screens
+        ObjectMap<String, IScreen> screens = getScreens();
+        screens.put(ScreenEnum.LEVEL_SCREEN.name(), new LevelScreen(this));
+
+        startLevelScreen(LevelEnum.TEST1);
+
     }
 
     private static void loadAssets(AssetManager assetManager) {
@@ -178,15 +200,25 @@ public final class RocketPartnersGame extends Game2D implements IEventListener {
         );
     }
 
+    public void startLevelScreen(LevelEnum level) {
+        LevelScreen levelScreen = (LevelScreen) getScreens().get(ScreenEnum.LEVEL_SCREEN.name());
+        levelScreen.setTmxMapSource(level.getTmxSourceFile());
+        levelScreen.setMusicAsset(level.getMusicAsset());
+        setCurrentScreen(ScreenEnum.LEVEL_SCREEN.name());
+    }
+
     public void onEvent(@NotNull Event event) {
         if (eventKeyMask.contains(event.getKey())) {
-            // TODO: implement event handling
+            switch ((EventType) event.getKey()) {
+                case TURN_CONTROLLER_OFF -> controllerPoller.setOn(false);
+                case TURN_CONTROLLER_ON -> controllerPoller.setOn(true);
+            }
         }
     }
 
     public void render() {
-    }
-
-    public void dispose() {
+        super.render();
+        float delta = Gdx.graphics.getDeltaTime();
+        audioMan.update(delta);
     }
 }

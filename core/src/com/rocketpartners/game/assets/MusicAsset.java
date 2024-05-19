@@ -8,7 +8,7 @@ import org.jetbrains.annotations.NotNull;
 
 @RequiredArgsConstructor(access = AccessLevel.PRIVATE)
 public enum MusicAsset implements IAsset {
-    ;
+    MMX2_X_HUNTER_MUSIC("MMX2_X-Hunter.mp3");
 
     public static final String MUSIC_ASSET_PREFIX = "music/";
 

@@ -1,7 +1,7 @@
 package com.rocketpartners.game.world;
 
 public enum FixtureType {
-    BLOCK,
+    WORLD_BLOCK,
     PLAYER,
     BODY,
     FEET,

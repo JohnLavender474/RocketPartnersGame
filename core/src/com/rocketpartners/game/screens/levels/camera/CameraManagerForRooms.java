@@ -19,6 +19,7 @@ import lombok.Getter;
 import lombok.Setter;
 
 import java.util.Objects;
+import java.util.function.Consumer;
 
 import static com.engine.common.UtilMethodsKt.getOverlapPushDirection;
 import static com.engine.common.UtilMethodsKt.interpolate;
@@ -29,7 +30,7 @@ public class CameraManagerForRooms implements Updatable, Resettable {
     private static final float DELAY_DURATION = 0.35f;
     private static final float TRANS_DURATION = 1f;
     private static final float DISTANCE_ON_TRANS = 1.5f;
-    private static final float INTERPOLATION_SCALAR = 10f;
+    private static final float INTERPOLATION_SCALAR = 3f;
 
     private final Camera camera;
     private final Timer delayTimer;
@@ -52,7 +53,7 @@ public class CameraManagerForRooms implements Updatable, Resettable {
     @Setter
     private Runnable onBeginTransition;
     @Setter
-    private Runnable onContinueTransition;
+    private Consumer<Float> onContinueTransition;
     @Setter
     private Runnable onEndTransition;
 
@@ -205,7 +206,7 @@ public class CameraManagerForRooms implements Updatable, Resettable {
         }
     }
 
-    private void onTransition(float v) {
+    private void onTransition(float delta) {
         switch (transitionState) {
             case END -> {
                 transitionDirection = null;
@@ -220,14 +221,14 @@ public class CameraManagerForRooms implements Updatable, Resettable {
                 if (transitionState == ProcessState.BEGIN) {
                     onBeginTransition.run();
                 } else {
-                    onContinueTransition.run();
+                    onContinueTransition.accept(delta);
                 }
                 transitionState = ProcessState.CONTINUE;
-                delayTimer.update(v);
+                delayTimer.update(delta);
                 if (!delayTimer.isFinished()) {
                     return;
                 }
-                transTimer.update(v);
+                transTimer.update(delta);
                 Vector2 pos = interpolate(transitionStart, transitionTarget, getTransitionTimerRatio());
                 camera.position.x = pos.x;
                 camera.position.y = pos.y;
