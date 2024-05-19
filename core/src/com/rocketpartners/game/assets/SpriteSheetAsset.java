@@ -1,22 +1,22 @@
 package com.rocketpartners.game.assets;
 
-import com.badlogic.gdx.audio.Music;
+import com.badlogic.gdx.graphics.g2d.TextureAtlas;
 import com.badlogic.gdx.utils.Array;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import org.jetbrains.annotations.NotNull;
 
 @RequiredArgsConstructor(access = AccessLevel.PRIVATE)
-public enum TextureAsset implements IAsset {
-    ;
+public enum SpriteSheetAsset implements IAsset {
+    PLAYER_SPRITE_SHEET("player.txt");
 
-    public static final String TEXTURE_ASSET_PREFIX = "sprites/sprite_sheets";
+    public static final String SPRITE_SHEET_ASSET_PREFIX = "sprites/sprite_sheets";
 
     private final String src;
 
     public static Array<IAsset> asAssetArray() {
         Array<IAsset> array = new Array<>();
-        for (TextureAsset asset : TextureAsset.values()) {
+        for (SpriteSheetAsset asset : SpriteSheetAsset.values()) {
             array.add(asset);
         }
         return array;
@@ -25,12 +25,12 @@ public enum TextureAsset implements IAsset {
     @NotNull
     @Override
     public String getSource() {
-        return TEXTURE_ASSET_PREFIX + src;
+        return SPRITE_SHEET_ASSET_PREFIX + src;
     }
 
     @NotNull
     @Override
     public Class<?> getAssClass() {
-        return Music.class;
+        return TextureAtlas.class;
     }
 }

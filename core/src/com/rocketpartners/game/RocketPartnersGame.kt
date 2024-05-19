@@ -44,7 +44,7 @@ import com.engine.world.WorldSystem;
 import com.rocketpartners.game.assets.IAsset;
 import com.rocketpartners.game.assets.MusicAsset;
 import com.rocketpartners.game.assets.SoundAsset;
-import com.rocketpartners.game.assets.TextureAsset;
+import com.rocketpartners.game.assets.SpriteSheetAsset;
 import com.rocketpartners.game.audio.AudioManager;
 import com.rocketpartners.game.controllers.ControllerUtils;
 import com.rocketpartners.game.entities.Player;
@@ -131,7 +131,7 @@ public final class RocketPartnersGame extends Game2D implements IEventListener {
         Array<Iterable<IAsset>> assetArrays = new Array<>();
         assetArrays.add(MusicAsset.asAssetArray());
         assetArrays.add(SoundAsset.asAssetArray());
-        assetArrays.add(TextureAsset.asAssetArray());
+        assetArrays.add(SpriteSheetAsset.asAssetArray());
         for (IAsset asset : new MultiCollectionIterable<>(assetArrays)) {
             assetManager.load(asset.getSource(), asset.getAssClass());
         }

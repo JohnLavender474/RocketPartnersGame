@@ -1,12 +1,17 @@
 package com.rocketpartners.game.entities;
 
 import com.badlogic.gdx.graphics.Color;
+import com.badlogic.gdx.graphics.g2d.TextureAtlas;
+import com.badlogic.gdx.graphics.g2d.TextureRegion;
 import com.badlogic.gdx.math.Vector2;
 import com.badlogic.gdx.utils.Array;
 import com.badlogic.gdx.utils.ObjectMap;
 import com.badlogic.gdx.utils.ObjectSet;
 import com.engine.IGame2D;
+import com.engine.animations.Animation;
 import com.engine.animations.AnimationsComponent;
+import com.engine.animations.Animator;
+import com.engine.animations.IAnimation;
 import com.engine.audio.AudioComponent;
 import com.engine.behaviors.BehaviorsComponent;
 import com.engine.common.ClassInstanceUtils;
@@ -28,9 +33,12 @@ import com.engine.drawables.sprites.GameSprite;
 import com.engine.drawables.sprites.SpriteExtensionsKt;
 import com.engine.drawables.sprites.SpritesComponent;
 import com.engine.entities.GameEntity;
+import com.engine.entities.contracts.IAnimatedEntity;
+import com.engine.entities.contracts.IAudioEntity;
+import com.engine.entities.contracts.IBodyEntity;
+import com.engine.entities.contracts.ISpritesEntity;
 import com.engine.events.Event;
 import com.engine.events.IEventListener;
-import com.engine.points.Points;
 import com.engine.points.PointsComponent;
 import com.engine.updatables.UpdatablesComponent;
 import com.engine.world.Body;
@@ -39,25 +47,25 @@ import com.engine.world.BodyType;
 import com.engine.world.Fixture;
 import com.rocketpartners.game.Constants;
 import com.rocketpartners.game.assets.SoundAsset;
+import com.rocketpartners.game.assets.SpriteSheetAsset;
 import com.rocketpartners.game.damage.DamageNegotation;
 import com.rocketpartners.game.entities.contracts.IDirectionRotatable;
 import com.rocketpartners.game.entities.contracts.IGravityListener;
+import com.rocketpartners.game.entities.contracts.IHealthEntity;
 import com.rocketpartners.game.world.BodyComponentCreator;
 import com.rocketpartners.game.world.FixtureType;
 import com.rocketpartners.game.world.GravityType;
 import kotlin.Pair;
 import kotlin.jvm.functions.Function0;
-import kotlin.reflect.KClass;
 import lombok.Getter;
 import lombok.Setter;
 import org.jetbrains.annotations.NotNull;
 
-import java.util.Objects;
-
 @Getter
 @Setter
-public class Player extends GameEntity implements IEventListener, IDamageable, IFaceable, IBoundsSupplier,
-        IDirectionRotatable, IGravityListener {
+public class Player extends GameEntity implements IBodyEntity, IHealthEntity, IAudioEntity, ISpritesEntity,
+        IAnimatedEntity, IEventListener, IDamageable, IFaceable, IBoundsSupplier, IDirectionRotatable,
+        IGravityListener {
 
     private static final float SHOOT_ANIMATION_DURATION = 0.3f;
     private static final float DAMAGE_DURATION = 0.75f;
@@ -65,6 +73,9 @@ public class Player extends GameEntity implements IEventListener, IDamageable, I
     private static final float DAMAGE_FLASH_DURATION = 0.05f;
 
     private static ObjectMap<Class<? extends IDamager>, DamageNegotation> damageNegotiations;
+
+    private static boolean regionsInitialized;
+    private static TextureRegion standRegion;
 
     private final ObjectSet<Object> eventKeyMask;
     private final Timer shootAnimationTimer;
@@ -78,6 +89,7 @@ public class Player extends GameEntity implements IEventListener, IDamageable, I
     private float gravity;
     private Facing facing;
     private Direction directionRotation;
+    private GameSprite sprite;
 
     public Player(@NotNull IGame2D game) {
         super(game);
@@ -95,14 +107,20 @@ public class Player extends GameEntity implements IEventListener, IDamageable, I
 
     @Override
     public void init() {
+        if (!regionsInitialized) {
+            TextureAtlas atlas = getGame().getAssMan().get(
+                    SpriteSheetAsset.PLAYER_SPRITE_SHEET.getSource(), TextureAtlas.class);
+            standRegion = atlas.findRegion("stand");
+            regionsInitialized = true;
+        }
         addComponent(new AudioComponent(this));
         addComponent(defineBodyComponent());
         addComponent(defineBehaviorsComponent());
         addComponent(defineUpdatablesComponent());
         addComponent(defineSpritesComponent());
-        // TODO: addComponent(defineAnimationsComponent());
+        addComponent(defineAnimationsComponent());
+        addComponent(definePointsComponent());
         // TODO: addComponent(defineControllerComponent());
-        // TODO: addComponent(definePointsComponent());
     }
 
     @Override
@@ -113,9 +131,7 @@ public class Player extends GameEntity implements IEventListener, IDamageable, I
                 ClassInstanceUtils.convertToKClass(GameRectangle.class));
         assert spawnBounds != null;
         Vector2 spawnPoint = spawnBounds.getBottomCenterPoint();
-        Body body =
-                Objects.requireNonNull(getComponent(ClassInstanceUtils.convertToKClass(BodyComponent.class))).getBody();
-        body.setBottomCenterToPoint(spawnPoint);
+        getBody().setBottomCenterToPoint(spawnPoint);
 
         GravityType gravityType = GravityType.valueOf(props.getOrDefault(Constants.ConstKeys.GRAVITY_TYPE,
                 "normal_gravity", ClassInstanceUtils.convertToKClass(String.class)).toUpperCase());
@@ -154,15 +170,8 @@ public class Player extends GameEntity implements IEventListener, IDamageable, I
     @Override
     public boolean takeDamageFrom(@NotNull IDamager damager) {
         int damage = damageNegotiations.get(damager.getClass()).get(damager);
-        PointsComponent pointsComponent = getComponent(ClassInstanceUtils.convertToKClass(PointsComponent.class));
-        assert pointsComponent != null;
-        Points healthPoints = pointsComponent.getPoints(Constants.ConstKeys.HEALTH);
-        healthPoints.translate(damage);
-
-        AudioComponent audioComponent = getComponent(ClassInstanceUtils.convertToKClass(AudioComponent.class));
-        assert audioComponent != null;
-        audioComponent.requestToPlaySound(SoundAsset.PLAYER_DAMAGE_SOUND, false);
-
+        getHealthPoints().translate(-damage);
+        requestToPlaySound(SoundAsset.PLAYER_DAMAGE_SOUND, false);
         damageTimer.reset();
         return true;
     }
@@ -170,8 +179,7 @@ public class Player extends GameEntity implements IEventListener, IDamageable, I
     @NotNull
     @Override
     public GameRectangle getBounds() {
-        KClass<BodyComponent> key = ClassInstanceUtils.convertToKClass(BodyComponent.class);
-        return Objects.requireNonNull(getComponent(key)).getBody();
+        return getBody();
     }
 
     @Override
@@ -278,14 +286,30 @@ public class Player extends GameEntity implements IEventListener, IDamageable, I
     }
 
     private AnimationsComponent defineAnimationsComponent() {
-        return null;
-    }
+        Function0<String> keySupplier = () -> {
+            return "stand";
+        };
+        ObjectMap<String, IAnimation> animations = new ObjectMap<>();
+        animations.put("stand", new Animation(standRegion));
+        Animator animator = new Animator(keySupplier, animations);
 
-    private ControllerComponent defineControllerComponent() {
-        return null;
+        return new AnimationsComponent(this, animator);
     }
 
     private PointsComponent definePointsComponent() {
+        PointsComponent pointsComponent = new PointsComponent(this);
+        pointsComponent.putPoints(Constants.ConstKeys.HEALTH, Constants.ConstVals.MIN_HEALTH,
+                Constants.ConstVals.MAX_HEALTH, Constants.ConstVals.MAX_HEALTH);
+        pointsComponent.putListener(Constants.ConstKeys.HEALTH, it -> {
+            if (it.getCurrent() <= Constants.ConstVals.MIN_HEALTH) {
+                kill(null);
+            }
+            return null;
+        });
+        return pointsComponent;
+    }
+
+    private ControllerComponent defineControllerComponent() {
         return null;
     }
 }
