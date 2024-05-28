@@ -5,11 +5,17 @@ import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.RequiredArgsConstructor;
 
-@Getter
 @RequiredArgsConstructor(access = AccessLevel.PRIVATE)
 public enum LevelEnum {
     TEST1("Test1.tmx", MusicAsset.MMX2_X_HUNTER_MUSIC);
 
+    private static final String TMX_PATH = "tiled_maps/tmx/";
+
     private final String tmxSourceFile;
+    @Getter
     private final MusicAsset musicAsset;
+
+    public String getTmxSourceFile() {
+        return TMX_PATH + tmxSourceFile;
+    }
 }

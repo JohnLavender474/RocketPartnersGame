@@ -1,5 +1,6 @@
 package com.rocketpartners.game.behaviors
 
 enum class BehaviorType {
-    JUMPING
+    JUMPING,
+    WALL_SLIDE
 }

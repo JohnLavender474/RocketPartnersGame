@@ -124,7 +124,7 @@
             <key>data</key>
             <struct type="DataFile">
                 <key>name</key>
-                <filename></filename>
+                <filename>../sprite_sheets/player.txt</filename>
             </struct>
         </map>
         <key>multiPackMode</key>
@@ -191,7 +191,7 @@
             </struct>
             <key type="filename">../frames/player/congrats.png</key>
             <key type="filename">../frames/player/jump.png</key>
-            <key type="filename">../frames/player/shoot.png</key>
+            <key type="filename">../frames/player/slip.png</key>
             <key type="filename">../frames/player/stand-shoot.png</key>
             <key type="filename">../frames/player/stand.png</key>
             <key type="filename">../frames/player/thrustforce.png</key>
@@ -207,6 +207,21 @@
                 <rect>16,16,32,32</rect>
                 <key>scale9Paddings</key>
                 <rect>16,16,32,32</rect>
+                <key>scale9FromFile</key>
+                <false/>
+            </struct>
+            <key type="filename">../frames/player/run.png</key>
+            <struct type="IndividualSpriteSettings">
+                <key>pivotPoint</key>
+                <point_f>0.5,0.5</point_f>
+                <key>spriteScale</key>
+                <double>1</double>
+                <key>scale9Enabled</key>
+                <false/>
+                <key>scale9Borders</key>
+                <rect>32,32,64,64</rect>
+                <key>scale9Paddings</key>
+                <rect>32,32,64,64</rect>
                 <key>scale9FromFile</key>
                 <false/>
             </struct>

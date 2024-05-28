@@ -134,24 +134,24 @@ public class CameraManagerForRooms implements Updatable, Resettable {
         focusStart.set(focus.getBounds().getCenter());
         focusTarget.set(focusStart);
         switch (transitionDirection) {
-            case LEFT -> {
+            case LEFT:
                 transitionTarget.x = (rectangle.x + rectangle.width) - Math.min(rectangle.width / 2f,
                         camera.viewportWidth / 2f);
                 focusTarget.x = (rectangle.x + rectangle.width - DISTANCE_ON_TRANS * Constants.ConstVals.PPM);
-            }
-            case RIGHT -> {
+                break;
+            case RIGHT:
                 transitionTarget.x = rectangle.x + Math.min(rectangle.width / 2f, camera.viewportWidth / 2f);
                 focusTarget.x = rectangle.x + DISTANCE_ON_TRANS * Constants.ConstVals.PPM;
-            }
-            case UP -> {
+                break;
+            case UP:
                 transitionTarget.y = rectangle.y + Math.min(rectangle.height / 2f, camera.viewportHeight / 2f);
                 focusTarget.y = rectangle.y + DISTANCE_ON_TRANS * Constants.ConstVals.PPM;
-            }
-            case DOWN -> {
+                break;
+            case DOWN:
                 transitionTarget.y = (rectangle.y + rectangle.height) - Math.min(rectangle.height / 2f,
                         camera.viewportHeight / 2f);
                 focusTarget.y = (rectangle.y + rectangle.height - DISTANCE_ON_TRANS * Constants.ConstVals.PPM);
-            }
+                break;
         }
     }
 
@@ -172,7 +172,9 @@ public class CameraManagerForRooms implements Updatable, Resettable {
         if (!currentRoom.getRectangle().overlaps(focus.getBounds())) {
             currentRoom = null;
         }
-        assert currentRoom != null;
+        if (currentRoom == null) {
+            return;
+        }
         GameRectangle currentRoomBounds = RectangleExtensionsKt.toGameRectangle(currentRoom.getRectangle());
         if (currentRoomBounds.overlaps((Rectangle) focus.getBounds())) {
             setCameraToFocusable(v);
@@ -208,7 +210,7 @@ public class CameraManagerForRooms implements Updatable, Resettable {
 
     private void onTransition(float delta) {
         switch (transitionState) {
-            case END -> {
+            case END:
                 transitionDirection = null;
                 transitionState = null;
                 delayTimer.reset();
@@ -216,8 +218,9 @@ public class CameraManagerForRooms implements Updatable, Resettable {
                 transitionStart.setZero();
                 transitionTarget.setZero();
                 onEndTransition.run();
-            }
-            case BEGIN, CONTINUE -> {
+                break;
+            case BEGIN:
+            case CONTINUE:
                 if (transitionState == ProcessState.BEGIN) {
                     onBeginTransition.run();
                 } else {
@@ -233,7 +236,7 @@ public class CameraManagerForRooms implements Updatable, Resettable {
                 camera.position.x = pos.x;
                 camera.position.y = pos.y;
                 transitionState = transTimer.isFinished() ? ProcessState.END : ProcessState.CONTINUE;
-            }
+                break;
         }
     }
 

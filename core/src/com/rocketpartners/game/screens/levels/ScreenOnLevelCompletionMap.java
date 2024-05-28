@@ -8,8 +8,10 @@ import lombok.NoArgsConstructor;
 public class ScreenOnLevelCompletionMap {
 
     public static ScreenEnum getScreen(LevelEnum level) {
-        return switch (level) {
-            case TEST1 -> ScreenEnum.SAVE_GAME_SCREEN;
-        };
+        switch (level) {
+            case TEST1:
+                return ScreenEnum.SAVE_GAME_SCREEN;
+        }
+        return null;
     }
 }

@@ -11,9 +11,9 @@ import com.rocketpartners.game.world.BodyComponentCreator;
 import com.rocketpartners.game.world.FixtureType;
 import org.jetbrains.annotations.NotNull;
 
-public class WorldBlock extends Block {
+public class WorldBlock extends BaseBlock {
 
-    public static final float STANDARD_FRICTION_X = 0.035f;
+    public static final float STANDARD_FRICTION_X = 0.075f;
     public static final float STANDARD_FRICTION_Y = 0f;
 
     public WorldBlock(@NotNull IGame2D game) {

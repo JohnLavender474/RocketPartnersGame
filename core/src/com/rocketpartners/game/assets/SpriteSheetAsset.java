@@ -10,7 +10,7 @@ import org.jetbrains.annotations.NotNull;
 public enum SpriteSheetAsset implements IAsset {
     PLAYER_SPRITE_SHEET("player.txt");
 
-    public static final String SPRITE_SHEET_ASSET_PREFIX = "sprites/sprite_sheets";
+    public static final String SPRITE_SHEET_ASSET_PREFIX = "sprites/sprite_sheets/";
 
     private final String src;
 

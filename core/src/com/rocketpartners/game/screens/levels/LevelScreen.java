@@ -13,7 +13,6 @@ import com.engine.IGame2D;
 import com.engine.IGameEngine;
 import com.engine.animations.AnimationsSystem;
 import com.engine.audio.AudioSystem;
-import com.engine.audio.IAudioManager;
 import com.engine.behaviors.BehaviorsSystem;
 import com.engine.common.objects.Properties;
 import com.engine.controller.ControllerSystem;
@@ -29,13 +28,11 @@ import com.engine.motion.MotionSystem;
 import com.engine.screens.levels.tiledmap.TiledMapLevelScreen;
 import com.engine.screens.levels.tiledmap.TiledMapLoadResult;
 import com.engine.screens.levels.tiledmap.builders.TiledMapLayerBuilders;
-import com.engine.spawns.ISpawner;
 import com.engine.spawns.Spawn;
 import com.engine.spawns.SpawnsManager;
 import com.engine.systems.IGameSystem;
 import com.engine.updatables.UpdatablesSystem;
 import com.engine.world.WorldSystem;
-import com.rocketpartners.game.Constants;
 import com.rocketpartners.game.RocketPartnersGame;
 import com.rocketpartners.game.assets.MusicAsset;
 import com.rocketpartners.game.assets.SoundAsset;
@@ -45,6 +42,7 @@ import com.rocketpartners.game.drawables.Background;
 import com.rocketpartners.game.entities.Player;
 import com.rocketpartners.game.events.EventType;
 import com.rocketpartners.game.screens.levels.camera.CameraManagerForRooms;
+import com.rocketpartners.game.screens.levels.events.PlayerSpawnEventHandler;
 import com.rocketpartners.game.screens.levels.map.MapBuilder;
 import com.rocketpartners.game.screens.levels.spawns.PlayerSpawnsManager;
 import lombok.Getter;
@@ -52,6 +50,9 @@ import lombok.Setter;
 import org.jetbrains.annotations.NotNull;
 
 import java.util.PriorityQueue;
+
+import static com.rocketpartners.game.Constants.ConstKeys;
+import static com.rocketpartners.game.Constants.ConstVals;
 
 @Getter
 @Setter
@@ -68,9 +69,10 @@ public class LevelScreen extends TiledMapLevelScreen {
     private Player player;
     private IGameEngine engine;
     private IEventsManager eventsMan;
-    private IAudioManager audioMan;
+    private AudioManager audioMan;
     private MusicAsset musicAsset;
     private PlayerSpawnsManager playerSpawnsMan;
+    private PlayerSpawnEventHandler playerSpawnEventHandler;
     private IControllerPoller controllerPoller;
     private Array<Background> backgrounds;
     private CameraManagerForRooms cameraManagerForRooms;
@@ -89,15 +91,17 @@ public class LevelScreen extends TiledMapLevelScreen {
         disposables = new Array<>();
         drawables = ((RocketPartnersGame) getGame()).getDrawables();
         shapes = ((RocketPartnersGame) getGame()).getShapes();
-        backgroundCamera = getGame().getViewports().get(Constants.ConstKeys.BACKGROUND).getCamera();
-        gameCamera = getGame().getViewports().get(Constants.ConstKeys.GAME).getCamera();
+        backgroundCamera = getGame().getViewports().get(ConstKeys.BACKGROUND).getCamera();
+        gameCamera = getGame().getViewports().get(ConstKeys.GAME).getCamera();
         uiStage = ((RocketPartnersGame) getGame()).getUiStage();
         player = ((RocketPartnersGame) getGame()).getPlayer();
         engine = getGame().getEngine();
         eventsMan = getGame().getEventsMan();
         audioMan = ((RocketPartnersGame) getGame()).getAudioMan();
         playerSpawnsMan = new PlayerSpawnsManager(gameCamera);
+        playerSpawnEventHandler = new PlayerSpawnEventHandler((RocketPartnersGame) getGame());
         controllerPoller = getGame().getControllerPoller();
+        backgrounds = new Array<>();
         gameCamPriorPos = new Vector3();
 
         ObjectMap<String, IGameSystem> systemsMap = ((RocketPartnersGame) getGame()).getSystemsMap();
@@ -116,9 +120,9 @@ public class LevelScreen extends TiledMapLevelScreen {
             systemsToSwitch.forEach(system -> system.setOn(false));
 
             Properties properties = new Properties();
-            properties.put(Constants.ConstKeys.POSITION, cameraManagerForRooms.getTransitionInterpolation());
-            properties.put(Constants.ConstKeys.CURRENT, cameraManagerForRooms.getCurrentRoom());
-            properties.put(Constants.ConstKeys.PRIOR, cameraManagerForRooms.getPriorRoom());
+            properties.put(ConstKeys.POSITION, cameraManagerForRooms.getTransitionInterpolation());
+            properties.put(ConstKeys.CURRENT, cameraManagerForRooms.getCurrentRoom());
+            properties.put(ConstKeys.PRIOR, cameraManagerForRooms.getPriorRoom());
             eventsMan.submitEvent(new Event(EventType.BEGIN_ROOM_TRANS, new Properties()));
         });
         cameraManagerForRooms.setOnContinueTransition(delta -> {
@@ -129,19 +133,19 @@ public class LevelScreen extends TiledMapLevelScreen {
             }
 
             Properties eventProps = new Properties();
-            eventProps.put(Constants.ConstKeys.POSITION, cameraManagerForRooms.getTransitionInterpolation());
+            eventProps.put(ConstKeys.POSITION, cameraManagerForRooms.getTransitionInterpolation());
             eventsMan.submitEvent(new Event(EventType.CONTINUE_ROOM_TRANS, eventProps));
         });
         cameraManagerForRooms.setOnEndTransition(() -> {
             RectangleMapObject currentRoom = cameraManagerForRooms.getCurrentRoom();
             Properties eventProps = new Properties();
-            eventProps.put(Constants.ConstKeys.ROOM, currentRoom);
+            eventProps.put(ConstKeys.ROOM, currentRoom);
 
             eventsMan.submitEvent(new Event(EventType.END_ROOM_TRANS, eventProps));
 
             MapProperties currentRoomProps = currentRoom.getProperties();
-            if (currentRoomProps.containsKey(Constants.ConstKeys.EVENT)) {
-                String eventString = currentRoomProps.get(Constants.ConstKeys.EVENT, String.class);
+            if (currentRoomProps.containsKey(ConstKeys.EVENT)) {
+                String eventString = currentRoomProps.get(ConstKeys.EVENT, String.class);
                 EventType eventType = EventType.valueOf(eventString.toUpperCase());
                 eventsMan.submitEvent(new Event(eventType, eventProps));
             } else {
@@ -165,10 +169,12 @@ public class LevelScreen extends TiledMapLevelScreen {
         int worldWidth = tiledMapLoadResult.getWorldWidth();
         int worldHeight = tiledMapLoadResult.getWorldHeight();
 
-        SimpleNodeGraphMap graphMap = new SimpleNodeGraphMap(0, 0, worldWidth, worldHeight, Constants.ConstVals.PPM);
+        SimpleNodeGraphMap graphMap = new SimpleNodeGraphMap(0, 0, worldWidth, worldHeight, ConstVals.PPM);
         ((RocketPartnersGame) getGame()).setGraphMap(graphMap);
 
         gameCamPriorPos.set(gameCamera.position);
+
+        playerSpawnEventHandler.init();
 
         // TODO: set background and foreground parallax
     }
@@ -176,18 +182,14 @@ public class LevelScreen extends TiledMapLevelScreen {
     @NotNull
     @Override
     protected TiledMapLayerBuilders getLayerBuilders() {
-        return new MapBuilder((RocketPartnersGame) getGame(), spawnsMan);
+        return new MapBuilder((RocketPartnersGame) getGame(), cameraManagerForRooms, spawnsMan, playerSpawnsMan);
     }
 
     @Override
     protected void buildLevel(@NotNull Properties properties) {
+        // TODO:
+        /*
         backgrounds = (Array<Background>) properties.get(Constants.ConstKeys.BACKGROUNDS);
-
-        String playerSpawnsKey = Constants.ConstKeys.PLAYER + "_" + Constants.ConstKeys.SPAWNS;
-        Array<RectangleMapObject> playerSpawnObjs = (Array<RectangleMapObject>) properties.get(playerSpawnsKey);
-        if (playerSpawnObjs != null) {
-            playerSpawnsMan.setSpawnObjs(playerSpawnObjs);
-        }
 
         Array<RectangleMapObject> rooms = (Array<RectangleMapObject>) properties.get(Constants.ConstKeys.ROOMS);
         cameraManagerForRooms.setRooms(rooms);
@@ -198,28 +200,35 @@ public class LevelScreen extends TiledMapLevelScreen {
 
         Array<Disposable> disposables = (Array<Disposable>) properties.get(Constants.ConstKeys.DISPOSABLES);
         this.disposables.addAll(disposables);
+         */
     }
 
     @Override
     public void onEvent(@NotNull Event event) {
         switch ((EventType) event.getKey()) {
-            case GAME_PAUSE -> getGame().pause();
-            case GAME_RESUME -> getGame().resume();
-            case PLAYER_SPAWN -> {
+            case GAME_PAUSE:
+                getGame().pause();
+                break;
+            case GAME_RESUME:
+                getGame().resume();
+                break;
+            case PLAYER_SPAWN:
                 cameraManagerForRooms.reset();
                 engine.getSystems().forEach(system -> system.setOn(true));
                 engine.spawn(player, playerSpawnsMan.getCurrentSpawnProps());
                 // TODO: unset entity stats handler
-            }
-            case PLAYER_READY -> eventsMan.submitEvent(new Event(EventType.TURN_CONTROLLER_ON, new Properties()));
-            case PLAYER_JUST_DIED -> {
+                break;
+            case PLAYER_READY:
+                eventsMan.submitEvent(new Event(EventType.TURN_CONTROLLER_ON, new Properties()));
+                break;
+            case PLAYER_JUST_DIED:
                 audioMan.stopMusic(null);
                 // TODO: init player death event
-            }
-            case PLAYER_DONE_DYIN -> {
+                break;
+            case PLAYER_DONE_DYIN:
                 audioMan.playMusic(musicAsset, true);
                 // TODO: init player spawn event or present game over screen
-            }
+                break;
         }
     }
 
@@ -293,7 +302,7 @@ public class LevelScreen extends TiledMapLevelScreen {
             gameSprite.draw(batch);
         }
 
-        batch.setProjectionMatrix(uiStage.getCamera().combined);
+        // batch.setProjectionMatrix(uiStage.getCamera().combined);
 
         /*
         TODO:
@@ -326,9 +335,14 @@ public class LevelScreen extends TiledMapLevelScreen {
     public void dispose() {
         super.dispose();
         if (getInitialized()) {
-            eventsMan.removeListener(this);
             disposables.forEach(Disposable::dispose);
             disposables.clear();
+            engine.reset();
+            audioMan.stopMusic(null);
+            eventsMan.removeListener(this);
+            spawnsMan.reset();
+            playerSpawnsMan.reset();
+            cameraManagerForRooms.reset();
         }
     }
 
@@ -343,7 +357,7 @@ public class LevelScreen extends TiledMapLevelScreen {
             }
         });
 
-        ((AudioManager) audioMan).pauseAllSound();
+        audioMan.pauseAllSound();
         audioMan.pauseMusic(null);
         audioMan.playSound(SoundAsset.PAUSE_SOUND, false);
     }

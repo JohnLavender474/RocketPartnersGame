@@ -35,11 +35,12 @@ public class Constants {
         public static final String CURRENT = "current";
         public static final String GRAVITY_TYPE = "gravity_type";
         public static final String GRAVITY_DIRECTION = "gravity_direction";
+        public static final String BODY_SENSES = "body_senses";
     }
 
     public static class ConstVals {
-        public static final int VIEW_WIDTH = 16;
-        public static final int VIEW_HEIGHT = 12;
+        public static final int VIEW_WIDTH = 12;
+        public static final int VIEW_HEIGHT = 10;
         public static final int PPM = 32;
         public static final float WORLD_TIME_STEP = 1 / 150f;
         public static final float STANDARD_TIME_TO_CULL = 1f;

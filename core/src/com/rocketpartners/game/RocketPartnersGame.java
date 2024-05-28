@@ -2,6 +2,8 @@ package com.rocketpartners.game;
 
 import com.badlogic.gdx.Gdx;
 import com.badlogic.gdx.assets.AssetManager;
+import com.badlogic.gdx.audio.Music;
+import com.badlogic.gdx.audio.Sound;
 import com.badlogic.gdx.graphics.g2d.Batch;
 import com.badlogic.gdx.graphics.g2d.SpriteBatch;
 import com.badlogic.gdx.graphics.glutils.ShapeRenderer;
@@ -9,6 +11,7 @@ import com.badlogic.gdx.scenes.scene2d.Stage;
 import com.badlogic.gdx.utils.Array;
 import com.badlogic.gdx.utils.ObjectMap;
 import com.badlogic.gdx.utils.ObjectSet;
+import com.badlogic.gdx.utils.OrderedMap;
 import com.badlogic.gdx.utils.viewport.FitViewport;
 import com.badlogic.gdx.utils.viewport.Viewport;
 import com.engine.Game2D;
@@ -17,6 +20,7 @@ import com.engine.IGameEngine;
 import com.engine.animations.AnimationsSystem;
 import com.engine.audio.AudioSystem;
 import com.engine.behaviors.BehaviorsSystem;
+import com.engine.common.extensions.AssetManagerExtensionsKt;
 import com.engine.common.extensions.ObjectSetExtensionsKt;
 import com.engine.common.objects.MultiCollectionIterable;
 import com.engine.controller.ControllerSystem;
@@ -24,13 +28,16 @@ import com.engine.controller.buttons.Buttons;
 import com.engine.controller.polling.ControllerPoller;
 import com.engine.controller.polling.IControllerPoller;
 import com.engine.cullables.CullablesSystem;
+import com.engine.drawables.fonts.BitmapFontHandle;
 import com.engine.drawables.fonts.FontsSystem;
 import com.engine.drawables.shapes.DrawableShapesSystem;
 import com.engine.drawables.shapes.IDrawableShape;
 import com.engine.drawables.sorting.DrawingSection;
 import com.engine.drawables.sorting.IComparableDrawable;
+import com.engine.drawables.sprites.GameSprite;
 import com.engine.drawables.sprites.SpritesSystem;
 import com.engine.events.Event;
+import com.engine.events.EventsManager;
 import com.engine.events.IEventListener;
 import com.engine.events.IEventsManager;
 import com.engine.graph.IGraphMap;
@@ -61,6 +68,8 @@ import org.jetbrains.annotations.NotNull;
 
 import java.util.Comparator;
 import java.util.PriorityQueue;
+import java.util.function.Consumer;
+import java.util.function.Supplier;
 
 @Getter
 @Setter
@@ -91,12 +100,23 @@ public final class RocketPartnersGame extends Game2D implements IEventListener {
         buttons = ControllerUtils.getInstance().loadButtons();
         controllerPoller = new ControllerPoller(buttons);
         assMan = new AssetManager();
+        eventsMan = new EventsManager();
         eventKeyMask = ObjectSetExtensionsKt.objectSetOf(EventType.TURN_CONTROLLER_ON, EventType.TURN_CONTROLLER_OFF);
 
         loadAssets(assMan);
         // TODO: instead of immediately finishing loading, should show progress bar and lock game until
         //  loading is complete
         assMan.finishLoading();
+
+        OrderedMap<SoundAsset, Sound> sounds = new OrderedMap<>();
+        for (SoundAsset ass : SoundAsset.values()) {
+            sounds.put(ass, AssetManagerExtensionsKt.getSound(assMan, ass.getSource()));
+        }
+        OrderedMap<MusicAsset, Music> music = new OrderedMap<>();
+        for (MusicAsset ass : MusicAsset.values()) {
+            music.put(ass, AssetManagerExtensionsKt.getMusic(assMan, ass.getSource()));
+        }
+        audioMan = new AudioManager(sounds, music);
 
         int screenWidth = Constants.ConstVals.VIEW_WIDTH * Constants.ConstVals.PPM;
         int screenHeight = Constants.ConstVals.VIEW_HEIGHT * Constants.ConstVals.PPM;
@@ -144,54 +164,34 @@ public final class RocketPartnersGame extends Game2D implements IEventListener {
 
         return new GameEngine(
                 new ControllerSystem(game.getControllerPoller()),
-                new AnimationsSystem(),
                 new BehaviorsSystem(),
                 new WorldSystem(
                         new ContactListener(game),
-                        game::getGraphMap,
+                        (Supplier<IGraphMap>) game::getGraphMap,
                         Constants.ConstVals.WORLD_TIME_STEP,
                         new CollisionHandler(game),
                         worldFilterMap,
-                        true
-                ),
+                        true),
                 new CullablesSystem(),
                 new PathfindingSystem(
                         (component) -> new Pathfinder(game.getGraphMap(), component.getParams()),
                         Constants.ConstVals.PATHFINDER_TIMEOUT,
-                        Constants.ConstVals.PATHFINDER_TIMEOUT_UNIT
-                ),
+                        Constants.ConstVals.PATHFINDER_TIMEOUT_UNIT),
                 new PointsSystem(),
                 new UpdatablesSystem(),
-                new FontsSystem((font) -> {
-                    game.getDrawables().get(font.getPriority().getSection()).add(font);
-                    return null;
-                }),
-                new SpritesSystem((sprite) -> {
-                    game.getDrawables().get(sprite.getPriority().getSection()).add(sprite);
-                    return null;
-                }),
+                new FontsSystem((Consumer<BitmapFontHandle>) (font) ->
+                        game.getDrawables().get(font.getPriority().getSection()).add(font)),
                 new AnimationsSystem(),
-                new DrawableShapesSystem((shape) -> {
-                    game.getShapes().add(shape);
-                    return null;
-                }, DEBUG_SHAPES),
+                new SpritesSystem((Consumer<GameSprite>) (sprite) ->
+                        game.getDrawables().get(sprite.getPriority().getSection()).add(sprite)),
+                new DrawableShapesSystem((Consumer<IDrawableShape>) (shape) ->
+                        game.getShapes().add(shape),
+                        DEBUG_SHAPES),
                 new AudioSystem(
-                        (request) -> {
-                            game.getAudioMan().playSound(request.getSource(), request.getLoop());
-                            return null;
-                        },
-                        (request) -> {
-                            game.getAudioMan().playMusic(request.getSource(), request.getLoop());
-                            return null;
-                        },
-                        (request) -> {
-                            game.getAudioMan().stopSound(request);
-                            return null;
-                        },
-                        (request) -> {
-                            game.getAudioMan().stopMusic(request);
-                            return null;
-                        },
+                        (request) -> game.getAudioMan().playSound(request.getSource(), request.getLoop()),
+                        (request) -> game.getAudioMan().playMusic(request.getSource(), request.getLoop()),
+                        (request) -> game.getAudioMan().stopSound(request),
+                        game.getAudioMan()::stopMusic,
                         false,
                         false,
                         true,
@@ -210,8 +210,12 @@ public final class RocketPartnersGame extends Game2D implements IEventListener {
     public void onEvent(@NotNull Event event) {
         if (eventKeyMask.contains(event.getKey())) {
             switch ((EventType) event.getKey()) {
-                case TURN_CONTROLLER_OFF -> controllerPoller.setOn(false);
-                case TURN_CONTROLLER_ON -> controllerPoller.setOn(true);
+                case TURN_CONTROLLER_OFF:
+                    controllerPoller.setOn(false);
+                    break;
+                case TURN_CONTROLLER_ON:
+                    controllerPoller.setOn(true);
+                    break;
             }
         }
     }

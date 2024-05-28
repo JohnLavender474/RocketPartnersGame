@@ -42,7 +42,7 @@ public class AudioManager implements Updatable, IAudioManager {
 
         @Override
         public boolean equals(Object o) {
-            return o instanceof SoundEntry s && s.ass == ass;
+            return o instanceof SoundEntry && ((SoundEntry) o).ass == ass;
         }
     }
 
