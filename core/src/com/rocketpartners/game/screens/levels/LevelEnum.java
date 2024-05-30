@@ -7,7 +7,7 @@ import lombok.RequiredArgsConstructor;
 
 @RequiredArgsConstructor(access = AccessLevel.PRIVATE)
 public enum LevelEnum {
-    TEST1("Test1.tmx", MusicAsset.MMX2_X_HUNTER_MUSIC);
+    TEST1("Test1.tmx", MusicAsset.INTO_THE_LAVA_PIT);
 
     private static final String TMX_PATH = "tiled_maps/tmx/";
 

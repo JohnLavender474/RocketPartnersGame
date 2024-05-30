@@ -15,7 +15,6 @@ import com.engine.behaviors.BehaviorsComponent;
 import com.engine.common.enums.Direction;
 import com.engine.common.enums.Facing;
 import com.engine.common.enums.Position;
-import com.engine.common.extensions.ArrayExtensionsKt;
 import com.engine.common.extensions.ObjectSetExtensionsKt;
 import com.engine.common.interfaces.IBoundsSupplier;
 import com.engine.common.interfaces.IFaceable;
@@ -57,7 +56,6 @@ import org.jetbrains.annotations.NotNull;
 
 import java.util.HashMap;
 import java.util.Map;
-import java.util.function.Function;
 import java.util.function.Supplier;
 
 import static com.rocketpartners.game.Constants.ConstKeys;
@@ -87,7 +85,8 @@ public class Player extends GameEntity implements IBodyEntity, IHealthEntity, IA
     private static final float JETPACK_IMPULSE = 2f;
 
     private static final float MAX_GROUND_RUN_SPEED = 9f;
-    private static final float MAX_AIR_RUN_SPEED = 5f;
+    private static final float MAX_JUMP_RUN_SPEED = 4f;
+    private static final float MAX_JETPACK_RUN_SPEED = 2f;
 
     private static final float RUN_IMPULSE = 1.5f;
     private static final float GROUND_JUMP_IMPULSE = 15f;
@@ -163,7 +162,7 @@ public class Player extends GameEntity implements IBodyEntity, IHealthEntity, IA
 
         GravityType gravityType = GravityType.valueOf(props.getOrDefault(ConstKeys.GRAVITY_TYPE,
                 "normal_gravity", String.class).toUpperCase());
-        enterAreaOfGravityType(GravityType.LOW_GRAVITY);
+        enterAreaOfGravityType(gravityType);
 
         Direction gravityDirection = Direction.valueOf(props.getOrDefault(ConstKeys.GRAVITY_DIRECTION,
                 "up", String.class).toUpperCase());
@@ -337,7 +336,15 @@ public class Player extends GameEntity implements IBodyEntity, IHealthEntity, IA
                                         isBehaviorActive(BehaviorType.WALL_SLIDING));
                     }
                 },
-                () -> getBody().getPhysics().getVelocity().y = GROUND_JUMP_IMPULSE * ConstVals.PPM,
+                () -> {
+                    Vector2 velocity = getBody().getPhysics().getVelocity();
+                    if (velocity.x > MAX_JUMP_RUN_SPEED * ConstVals.PPM) {
+                        velocity.x = MAX_JUMP_RUN_SPEED * ConstVals.PPM;
+                    } else if (velocity.x < -MAX_JUMP_RUN_SPEED * ConstVals.PPM) {
+                        velocity.x = -MAX_JUMP_RUN_SPEED * ConstVals.PPM;
+                    }
+                    velocity.y = GROUND_JUMP_IMPULSE * ConstVals.PPM;
+                },
                 null,
                 () -> getBody().getPhysics().getVelocity().y = 0f);
         behaviorsComponent.addBehavior(BehaviorType.JUMPING, jumpBehavior);
@@ -361,6 +368,13 @@ public class Player extends GameEntity implements IBodyEntity, IHealthEntity, IA
                 () -> {
                     aButtonTask = AButtonTask.JUMP;
                     getBody().getPhysics().setGravityOn(false);
+
+                    Vector2 velocity = getBody().getPhysics().getVelocity();
+                    if (velocity.x > MAX_JETPACK_RUN_SPEED * ConstVals.PPM) {
+                        velocity.x = MAX_JETPACK_RUN_SPEED * ConstVals.PPM;
+                    } else if (velocity.x < -MAX_JETPACK_RUN_SPEED * ConstVals.PPM) {
+                        velocity.x = -MAX_JETPACK_RUN_SPEED * ConstVals.PPM;
+                    }
                 },
                 (delta) -> {
                     timers.get("jetpack").update(delta);
@@ -499,8 +513,10 @@ public class Player extends GameEntity implements IBodyEntity, IHealthEntity, IA
                     float threshold;
                     if (BodyExtensions.isBodySensing(getBody(), BodySense.FEET_ON_GROUND)) {
                         threshold = MAX_GROUND_RUN_SPEED * ConstVals.PPM;
+                    } else if (isBehaviorActive(BehaviorType.JETPACKING)) {
+                        threshold = MAX_JETPACK_RUN_SPEED * ConstVals.PPM;
                     } else {
-                        threshold = MAX_AIR_RUN_SPEED * ConstVals.PPM;
+                        threshold = MAX_JUMP_RUN_SPEED * ConstVals.PPM;
                     }
                     float impulse = RUN_IMPULSE * ConstVals.PPM;
                     Vector2 velocity = getBody().getPhysics().getVelocity();
@@ -533,8 +549,10 @@ public class Player extends GameEntity implements IBodyEntity, IHealthEntity, IA
                     float threshold;
                     if (BodyExtensions.isBodySensing(getBody(), BodySense.FEET_ON_GROUND)) {
                         threshold = MAX_GROUND_RUN_SPEED * ConstVals.PPM;
+                    } else if (isBehaviorActive(BehaviorType.JETPACKING)) {
+                        threshold = MAX_JETPACK_RUN_SPEED * ConstVals.PPM;
                     } else {
-                        threshold = MAX_AIR_RUN_SPEED * ConstVals.PPM;
+                        threshold = MAX_JUMP_RUN_SPEED * ConstVals.PPM;
                     }
                     float impulse = RUN_IMPULSE * ConstVals.PPM;
                     Vector2 velocity = getBody().getPhysics().getVelocity();
