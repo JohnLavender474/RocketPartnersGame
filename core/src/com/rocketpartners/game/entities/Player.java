@@ -8,16 +8,15 @@ import com.badlogic.gdx.utils.Array;
 import com.badlogic.gdx.utils.ObjectMap;
 import com.badlogic.gdx.utils.ObjectSet;
 import com.engine.IGame2D;
-import com.engine.animations.Animation;
-import com.engine.animations.AnimationsComponent;
-import com.engine.animations.Animator;
-import com.engine.animations.IAnimation;
+import com.engine.animations.*;
 import com.engine.audio.AudioComponent;
 import com.engine.behaviors.Behavior;
 import com.engine.behaviors.BehaviorsComponent;
 import com.engine.common.enums.Direction;
 import com.engine.common.enums.Facing;
 import com.engine.common.enums.Position;
+import com.engine.common.extensions.ArrayExtensionsKt;
+import com.engine.common.extensions.ObjectSetExtensionsKt;
 import com.engine.common.interfaces.IBoundsSupplier;
 import com.engine.common.interfaces.IFaceable;
 import com.engine.common.objects.Properties;
@@ -58,6 +57,7 @@ import org.jetbrains.annotations.NotNull;
 
 import java.util.HashMap;
 import java.util.Map;
+import java.util.function.Function;
 import java.util.function.Supplier;
 
 import static com.rocketpartners.game.Constants.ConstKeys;
@@ -75,6 +75,7 @@ public class Player extends GameEntity implements IBodyEntity, IHealthEntity, IA
     }
 
     private static final float SHOOT_ANIMATION_DURATION = 0.3f;
+
     private static final float DAMAGE_DURATION = 0.75f;
     private static final float DAMAGE_RECOVERY_TIME = 1.5f;
     private static final float DAMAGE_FLASH_DURATION = 0.05f;
@@ -82,24 +83,22 @@ public class Player extends GameEntity implements IBodyEntity, IHealthEntity, IA
     private static final float CLAMP_VEL_X = 25f;
     private static final float CLAMP_VEL_Y = 50f;
 
+    private static final float JETPACK_DURATION = 2f;
+    private static final float JETPACK_IMPULSE = 2f;
+
     private static final float MAX_GROUND_RUN_SPEED = 9f;
     private static final float MAX_AIR_RUN_SPEED = 5f;
-    private static final float RUN_IMPULSE = 1.5f;
 
+    private static final float RUN_IMPULSE = 1.5f;
     private static final float GROUND_JUMP_IMPULSE = 15f;
 
     private static final float SLIP_ANIMATION_THRESHOLD = 0.3f;
 
     private static ObjectMap<Class<? extends IDamager>, DamageNegotation> damageNegotiations;
-
     private static Map<String, TextureRegion> regions;
 
     private final ObjectSet<Object> eventKeyMask;
-
-    private final Timer shootAnimationTimer;
-    private final Timer damageTimer;
-    private final Timer damageRecoveryTimer;
-    private final Timer damageFlashTimer;
+    private final Map<String, Timer> timers;
 
     private boolean canMove;
     private boolean running;
@@ -114,10 +113,12 @@ public class Player extends GameEntity implements IBodyEntity, IHealthEntity, IA
     public Player(@NotNull IGame2D game) {
         super(game);
         eventKeyMask = new ObjectSet<>();
-        shootAnimationTimer = new Timer(SHOOT_ANIMATION_DURATION);
-        damageTimer = new Timer(DAMAGE_DURATION);
-        damageRecoveryTimer = new Timer(DAMAGE_RECOVERY_TIME);
-        damageFlashTimer = new Timer(DAMAGE_FLASH_DURATION);
+        timers = new HashMap<>();
+        timers.put("shoot_anim", new Timer(SHOOT_ANIMATION_DURATION));
+        timers.put("damage", new Timer(DAMAGE_DURATION));
+        timers.put("damage_recovery", new Timer(DAMAGE_RECOVERY_TIME));
+        timers.put("damage_flash", new Timer(DAMAGE_FLASH_DURATION));
+        timers.put("jetpack", new Timer(JETPACK_DURATION));
 
         if (damageNegotiations == null) {
             damageNegotiations = new ObjectMap<>();
@@ -139,6 +140,7 @@ public class Player extends GameEntity implements IBodyEntity, IHealthEntity, IA
             regions.put("shoot", atlas.findRegion("shoot"));
             regions.put("jetpack", atlas.findRegion("jetpack"));
             regions.put("damaged", atlas.findRegion("damaged"));
+            regions.put("jetpackFlame", atlas.findRegion("jetpackFlame"));
         }
         addComponent(new AudioComponent(this));
         addComponent(defineBodyComponent());
@@ -161,16 +163,22 @@ public class Player extends GameEntity implements IBodyEntity, IHealthEntity, IA
 
         GravityType gravityType = GravityType.valueOf(props.getOrDefault(ConstKeys.GRAVITY_TYPE,
                 "normal_gravity", String.class).toUpperCase());
-        enterAreaOfGravityType(gravityType);
+        enterAreaOfGravityType(GravityType.LOW_GRAVITY);
 
         Direction gravityDirection = Direction.valueOf(props.getOrDefault(ConstKeys.GRAVITY_DIRECTION,
                 "up", String.class).toUpperCase());
         enterAreaOfGravityDirection(gravityDirection);
 
-        shootAnimationTimer.setToEnd();
-        damageTimer.setToEnd();
-        damageRecoveryTimer.setToEnd();
-        damageFlashTimer.setToEnd();
+        ObjectSet<String> timersToReset = ObjectSetExtensionsKt.objectSetOf("jetpack");
+        for (Map.Entry<String, Timer> entry : timers.entrySet()) {
+            String key = entry.getKey();
+            Timer timer = entry.getValue();
+            if (timersToReset.contains(key)) {
+                timer.reset();
+            } else {
+                timer.setToEnd();
+            }
+        }
 
         canMove = true;
         running = false;
@@ -189,7 +197,7 @@ public class Player extends GameEntity implements IBodyEntity, IHealthEntity, IA
 
     @Override
     public boolean getInvincible() {
-        return invincible || !damageTimer.isFinished() || !damageRecoveryTimer.isFinished();
+        return invincible || !timers.get("damage").isFinished() || !timers.get("damage_recovery").isFinished();
     }
 
     @Override
@@ -202,16 +210,16 @@ public class Player extends GameEntity implements IBodyEntity, IHealthEntity, IA
         int damage = damageNegotiations.get(damager.getClass()).get(damager);
         getHealthPoints().translate(-damage);
         requestToPlaySound(SoundAsset.PLAYER_DAMAGE_SOUND, false);
-        damageTimer.reset();
+        timers.get("damage").reset();
         return true;
     }
 
     public boolean isDamaged() {
-        return !damageTimer.isFinished();
+        return !timers.get("damage").isFinished();
     }
 
     public boolean isShooting() {
-        return !shootAnimationTimer.isFinished();
+        return !timers.get("shoot_animation").isFinished();
     }
 
     @NotNull
@@ -286,14 +294,20 @@ public class Player extends GameEntity implements IBodyEntity, IHealthEntity, IA
 
     private UpdatablesComponent defineUpdatablesComponent() {
         return new UpdatablesComponent(this, delta -> {
+            Timer damageTimer = timers.get("damage");
+            Timer damageRecoveryTimer = timers.get("damage_recovery");
+
             if (damageTimer.isFinished() && !damageRecoveryTimer.isFinished()) {
                 damageRecoveryTimer.update(delta);
+
+                Timer damageFlashTimer = timers.get("damage_flash");
                 damageFlashTimer.update(delta);
                 if (damageFlashTimer.isFinished()) {
                     damageFlashTimer.reset();
                     damageFlash = !damageFlash;
                 }
             }
+
             if (damageRecoveryTimer.isJustFinished()) {
                 damageFlash = false;
             }
@@ -303,7 +317,6 @@ public class Player extends GameEntity implements IBodyEntity, IHealthEntity, IA
     private BehaviorsComponent defineBehaviorsComponent() {
         BehaviorsComponent behaviorsComponent = new BehaviorsComponent(this);
 
-        // TODO: create behaviors
         Behavior jumpBehavior = new Behavior(
                 (delta) -> {
                     if (isDamaged() || !getGame().getControllerPoller().isPressed(ControllerButton.A)) {
@@ -327,8 +340,39 @@ public class Player extends GameEntity implements IBodyEntity, IHealthEntity, IA
                 () -> getBody().getPhysics().getVelocity().y = GROUND_JUMP_IMPULSE * ConstVals.PPM,
                 null,
                 () -> getBody().getPhysics().getVelocity().y = 0f);
-
         behaviorsComponent.addBehavior(BehaviorType.JUMPING, jumpBehavior);
+
+        Behavior jetpackBehavior = new Behavior(
+                (delta) -> {
+                    if (isDamaged() || timers.get("jetpack").isFinished() ||
+                            !getGame().getControllerPoller().isPressed(ControllerButton.A) ||
+                            BodyExtensions.isBodySensing(getBody(), BodySense.FEET_ON_GROUND) ||
+                            isBehaviorActive(BehaviorType.WALL_SLIDING)) {
+                        return false;
+                    }
+
+                    if (isBehaviorActive(BehaviorType.JETPACKING)) {
+                        return getGame().getControllerPoller().isPressed(ControllerButton.A);
+                    } else {
+                        return getGame().getControllerPoller().isJustPressed(ControllerButton.A) &&
+                                aButtonTask == AButtonTask.JETPACK;
+                    }
+                },
+                () -> {
+                    aButtonTask = AButtonTask.JUMP;
+                    getBody().getPhysics().setGravityOn(false);
+                },
+                (delta) -> {
+                    timers.get("jetpack").update(delta);
+                    getBody().getPhysics().getVelocity().y = JETPACK_IMPULSE * ConstVals.PPM;
+                },
+                () -> {
+                    getBody().getPhysics().setGravityOn(true);
+                    timers.get("jetpack").reset();
+                }
+        );
+        behaviorsComponent.addBehavior(BehaviorType.JETPACKING, jetpackBehavior);
+
         return behaviorsComponent;
     }
 
@@ -337,7 +381,7 @@ public class Player extends GameEntity implements IBodyEntity, IHealthEntity, IA
         playerSprite.setSize(2.475f * ConstVals.PPM, 1.875f * ConstVals.PPM);
 
         GameSprite jetpackFlameSprite = new GameSprite(new DrawingPriority(DrawingSection.FOREGROUND, 0), false);
-        jetpackFlameSprite.setSize(0.5f * ConstVals.PPM, 0.5f * ConstVals.PPM);
+        jetpackFlameSprite.setSize(1f * ConstVals.PPM, 1f * ConstVals.PPM);
 
         SpritesComponent spritesComponent = new SpritesComponent(this,
                 new Pair<>("player", playerSprite), new Pair<>("jetpackFlame", jetpackFlameSprite));
@@ -367,11 +411,12 @@ public class Player extends GameEntity implements IBodyEntity, IHealthEntity, IA
             gameSprite.setOriginCenter();
             gameSprite.setRotation(rotation);
 
+            float facingOffset = facing == Facing.LEFT ? 0.45f : -0.45f;
             Vector2 offset = (switch (directionRotation) {
-                case UP -> new Vector2(0f, -0.25f);
-                case DOWN -> new Vector2(0f, 0.25f);
-                case LEFT -> new Vector2(-0.25f, 0f);
-                case RIGHT -> new Vector2(0.25f, 0f);
+                case UP -> new Vector2(facingOffset, -0.25f);
+                case DOWN -> new Vector2(facingOffset, 0.25f);
+                case LEFT -> new Vector2(-0.25f, facingOffset);
+                case RIGHT -> new Vector2(0.25f, -facingOffset);
             }).scl(ConstVals.PPM);
             Vector2 position = getBounds().getPositionPoint(Position.CENTER).add(offset);
             SpriteExtensionsKt.setPosition(gameSprite, position, Position.CENTER);
@@ -380,6 +425,15 @@ public class Player extends GameEntity implements IBodyEntity, IHealthEntity, IA
     }
 
     private AnimationsComponent defineAnimationsComponent() {
+        Array<Pair<Function0<GameSprite>, IAnimator>> spriteAnimators = new Array<>();
+        spriteAnimators.add(definePlayerSpriteAnimator());
+        spriteAnimators.add(defineJetpackFlameSpriteAnimator());
+        return new AnimationsComponent(this, spriteAnimators);
+    }
+
+    private Pair<Function0<GameSprite>, IAnimator> definePlayerSpriteAnimator() {
+        GameSprite playerSprite = getSprites().get("player");
+
         Supplier<String> keySupplier = () -> {
             if (!BodyExtensions.isBodySensing(getBody(), BodySense.FEET_ON_GROUND)) {
                 return "jump";
@@ -402,7 +456,15 @@ public class Player extends GameEntity implements IBodyEntity, IHealthEntity, IA
         animations.put("stand-shoot", new Animation(regions.get("stand-shoot")));
 
         Animator animator = new Animator(keySupplier, animations);
-        return new AnimationsComponent(this, animator);
+
+        return new Pair<>(() -> playerSprite, animator);
+    }
+
+    private Pair<Function0<GameSprite>, IAnimator> defineJetpackFlameSpriteAnimator() {
+        GameSprite jetpackFlameSprite = getSprites().get("jetpackFlame");
+        Animation animation = new Animation(regions.get("jetpackFlame"), 4, 1, 0.1f, true);
+        Animator animator = new Animator(animation);
+        return new Pair<>(() -> jetpackFlameSprite, animator);
     }
 
     private PointsComponent definePointsComponent() {

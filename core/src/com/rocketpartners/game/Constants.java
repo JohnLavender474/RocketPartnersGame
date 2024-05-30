@@ -45,7 +45,7 @@ public class Constants {
         public static final float WORLD_TIME_STEP = 1 / 150f;
         public static final float STANDARD_TIME_TO_CULL = 1f;
         public static final float NORMAL_GRAVITY = -0.375f;
-        public static final float LOW_GRAVITY = -0.25f;
+        public static final float LOW_GRAVITY = -0.15f;
         public static final float GROUND_GRAVITY = -0.0015f;
         public static final int MAX_HEALTH = 30;
         public static final int MIN_HEALTH = 0;

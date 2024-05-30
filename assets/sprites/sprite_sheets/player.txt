@@ -1,5 +1,5 @@
 player.png
-size: 256, 448
+size: 128, 832
 format: RGBA8888
 filter: Nearest,Nearest
 repeat: none
@@ -12,77 +12,77 @@ brake
   index: -1
 congrats
   rotate: false
-  xy: 128, 0
+  xy: 0, 64
   size: 64, 64
   orig: 64, 64
   offset: 0, 0
   index: -1
 damaged
   rotate: false
-  xy: 192, 0
+  xy: 64, 64
   size: 64, 64
   orig: 64, 64
   offset: 0, 0
   index: -1
+jetpackFlame
+  rotate: false
+  xy: 0, 128
+  size: 64, 256
+  orig: 64, 256
+  offset: 0, 0
+  index: -1
 jump
   rotate: false
-  xy: 0, 64
+  xy: 64, 128
   size: 64, 64
   orig: 64, 64
   offset: 0, 0
   index: -1
 run
   rotate: false
-  xy: 64, 64
+  xy: 0, 384
   size: 128, 128
   orig: 128, 128
   offset: 0, 0
   index: -1
 slip
   rotate: false
-  xy: 192, 64
+  xy: 0, 512
   size: 64, 64
   orig: 64, 64
   offset: 0, 0
   index: -1
 stand-shoot
   rotate: false
-  xy: 0, 192
+  xy: 64, 512
   size: 64, 64
   orig: 64, 64
   offset: 0, 0
   index: -1
 stand
   rotate: false
-  xy: 64, 192
+  xy: 0, 576
   size: 64, 64
   orig: 64, 64
   offset: 0, 0
   index: -1
 thrust
   rotate: false
-  xy: 128, 192
+  xy: 0, 640
   size: 128, 128
   orig: 128, 128
   offset: 0, 0
   index: -1
-thrustexhaust
-  rotate: false
-  xy: 0, 320
-  size: 256, 64
-  orig: 256, 64
-  offset: 0, 0
-  index: -1
 thrustforce
   rotate: false
-  xy: 0, 384
+  xy: 0, 768
   size: 64, 64
   orig: 64, 64
   offset: 0, 0
   index: -1
 wallslide
   rotate: false
-  xy: 64, 384
+  xy: 64, 768
   size: 64, 64
   orig: 64, 64
   offset: 0, 0
