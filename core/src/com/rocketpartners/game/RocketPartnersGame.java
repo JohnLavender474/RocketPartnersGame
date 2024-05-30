@@ -159,6 +159,7 @@ public final class RocketPartnersGame extends Game2D implements IEventListener {
 
     private static IGameEngine createEngine(RocketPartnersGame game) {
         ObjectMap<Object, ObjectSet<Object>> worldFilterMap = new ObjectMap<>();
+        worldFilterMap.put(FixtureType.FEET, ObjectSetExtensionsKt.objectSetOf(FixtureType.WORLD_BLOCK));
         worldFilterMap.put(FixtureType.PLAYER, ObjectSetExtensionsKt.objectSetOf(FixtureType.ITEM));
         worldFilterMap.put(FixtureType.DAMAGEABLE, ObjectSetExtensionsKt.objectSetOf(FixtureType.DAMAGER));
 
@@ -210,12 +211,8 @@ public final class RocketPartnersGame extends Game2D implements IEventListener {
     public void onEvent(@NotNull Event event) {
         if (eventKeyMask.contains(event.getKey())) {
             switch ((EventType) event.getKey()) {
-                case TURN_CONTROLLER_OFF:
-                    controllerPoller.setOn(false);
-                    break;
-                case TURN_CONTROLLER_ON:
-                    controllerPoller.setOn(true);
-                    break;
+                case TURN_CONTROLLER_OFF -> controllerPoller.setOn(false);
+                case TURN_CONTROLLER_ON -> controllerPoller.setOn(true);
             }
         }
     }

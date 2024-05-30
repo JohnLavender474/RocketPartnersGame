@@ -9,6 +9,8 @@ import com.rocketpartners.game.Constants;
 import lombok.AccessLevel;
 import lombok.NoArgsConstructor;
 
+import static com.rocketpartners.game.Constants.*;
+
 @NoArgsConstructor(access = AccessLevel.PRIVATE)
 public class BodyComponentCreator {
 
@@ -24,12 +26,12 @@ public class BodyComponentCreator {
     }
 
     private static void define(IGameEntity entity, Body body) {
-        body.putProperty(Constants.ConstKeys.ENTITY, entity);
-        Updatable preProcessDelta = delta -> body.putProperty(Constants.ConstKeys.PRIOR, body.getPosition());
-        body.getPreProcess().put(Constants.ConstKeys.DELTA, preProcessDelta);
+        body.putProperty(ConstKeys.ENTITY, entity);
+        Updatable preProcessDelta = delta -> body.putProperty(ConstKeys.PRIOR, body.getPosition());
+        body.getPreProcess().put(ConstKeys.DELTA, preProcessDelta);
         body.getFixtures().forEach(e -> {
             IFixture fixture = e.getSecond();
-            fixture.putProperty(Constants.ConstKeys.ENTITY, entity);
+            fixture.putProperty(ConstKeys.ENTITY, entity);
         });
     }
 }

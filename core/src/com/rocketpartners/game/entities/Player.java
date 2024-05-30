@@ -13,6 +13,7 @@ import com.engine.animations.AnimationsComponent;
 import com.engine.animations.Animator;
 import com.engine.animations.IAnimation;
 import com.engine.audio.AudioComponent;
+import com.engine.behaviors.Behavior;
 import com.engine.behaviors.BehaviorsComponent;
 import com.engine.common.enums.Direction;
 import com.engine.common.enums.Facing;
@@ -28,6 +29,7 @@ import com.engine.damage.IDamageable;
 import com.engine.damage.IDamager;
 import com.engine.drawables.shapes.DrawableShapesComponent;
 import com.engine.drawables.shapes.IDrawableShape;
+import com.engine.drawables.sorting.DrawingPriority;
 import com.engine.drawables.sorting.DrawingSection;
 import com.engine.drawables.sprites.GameSprite;
 import com.engine.drawables.sprites.SpriteExtensionsKt;
@@ -38,10 +40,7 @@ import com.engine.events.Event;
 import com.engine.events.IEventListener;
 import com.engine.points.PointsComponent;
 import com.engine.updatables.UpdatablesComponent;
-import com.engine.world.Body;
-import com.engine.world.BodyComponent;
-import com.engine.world.BodyType;
-import com.engine.world.Fixture;
+import com.engine.world.*;
 import com.rocketpartners.game.assets.SoundAsset;
 import com.rocketpartners.game.assets.SpriteSheetAsset;
 import com.rocketpartners.game.behaviors.BehaviorType;
@@ -70,13 +69,24 @@ public class Player extends GameEntity implements IBodyEntity, IHealthEntity, IA
         IAnimatedEntity, IBehaviorsEntity, IEventListener, IDamageable, IFaceable, IBoundsSupplier, IDirectionRotatable,
         IGravityListener {
 
+    public enum AButtonTask {
+        JUMP,
+        JETPACK
+    }
+
     private static final float SHOOT_ANIMATION_DURATION = 0.3f;
     private static final float DAMAGE_DURATION = 0.75f;
     private static final float DAMAGE_RECOVERY_TIME = 1.5f;
     private static final float DAMAGE_FLASH_DURATION = 0.05f;
 
-    private static final float MAX_RUN_SPEED = 9f;
+    private static final float CLAMP_VEL_X = 25f;
+    private static final float CLAMP_VEL_Y = 50f;
+
+    private static final float MAX_GROUND_RUN_SPEED = 9f;
+    private static final float MAX_AIR_RUN_SPEED = 5f;
     private static final float RUN_IMPULSE = 1.5f;
+
+    private static final float GROUND_JUMP_IMPULSE = 15f;
 
     private static final float SLIP_ANIMATION_THRESHOLD = 0.3f;
 
@@ -85,21 +95,21 @@ public class Player extends GameEntity implements IBodyEntity, IHealthEntity, IA
     private static Map<String, TextureRegion> regions;
 
     private final ObjectSet<Object> eventKeyMask;
+
     private final Timer shootAnimationTimer;
     private final Timer damageTimer;
     private final Timer damageRecoveryTimer;
     private final Timer damageFlashTimer;
 
-    private Facing facing;
-    private Direction directionRotation;
-
     private boolean canMove;
     private boolean running;
-
     private boolean invincible;
     private boolean damageFlash;
 
+    private Facing facing;
+    private Direction directionRotation;
     private GravityType gravityType;
+    private AButtonTask aButtonTask;
 
     public Player(@NotNull IGame2D game) {
         super(game);
@@ -170,6 +180,7 @@ public class Player extends GameEntity implements IBodyEntity, IHealthEntity, IA
 
         facing = Facing.RIGHT;
         directionRotation = Direction.UP;
+        aButtonTask = AButtonTask.JUMP;
     }
 
     @Override
@@ -224,7 +235,9 @@ public class Player extends GameEntity implements IBodyEntity, IHealthEntity, IA
         body.setColor(Color.BROWN);
         body.width = 0.75f * ConstVals.PPM;
         body.height = 0.95f * ConstVals.PPM;
-        body.getPhysics().setTakeFrictionFromOthers(true);
+        PhysicsData physicsData = body.getPhysics();
+        physicsData.setVelocityClamp(new Vector2(CLAMP_VEL_X, CLAMP_VEL_Y).scl(ConstVals.PPM));
+        physicsData.setTakeFrictionFromOthers(true);
 
         Array<Function0<IDrawableShape>> debugShapesSupplier = new Array<>();
 
@@ -234,7 +247,7 @@ public class Player extends GameEntity implements IBodyEntity, IHealthEntity, IA
         debugShapesSupplier.add(bodyFixture::getShape);
 
         Fixture feetFixture = Fixture.Companion.createFixture(body, FixtureType.FEET,
-                new GameRectangle().setSize(0.6f * ConstVals.PPM, 0.15f * ConstVals.PPM));
+                new GameRectangle().setSize(0.6f * ConstVals.PPM, 0.1f * ConstVals.PPM));
         feetFixture.getOffsetFromBodyCenter().y = -0.5f * ConstVals.PPM;
         body.addFixture(feetFixture);
         feetFixture.getRawShape().setColor(Color.GREEN);
@@ -247,37 +260,21 @@ public class Player extends GameEntity implements IBodyEntity, IHealthEntity, IA
             if (gravityType != GravityType.NO_GRAVITY && BodyExtensions.isBodySensing(body, BodySense.FEET_ON_GROUND)) {
                 gravity = ConstVals.GROUND_GRAVITY;
             } else {
-                switch (gravityType) {
-                    case NORMAL_GRAVITY:
-                        gravity = ConstVals.NORMAL_GRAVITY;
-                        break;
-                    case LOW_GRAVITY:
-                        gravity = ConstVals.LOW_GRAVITY;
-                        break;
-                    case NO_GRAVITY:
-                        gravity = 0f;
-                        break;
-                    default:
-                        throw new IllegalStateException("Unexpected value: " + gravityType);
-                }
+                gravity = switch (gravityType) {
+                    case NORMAL_GRAVITY -> ConstVals.NORMAL_GRAVITY;
+                    case LOW_GRAVITY -> ConstVals.LOW_GRAVITY;
+                    case NO_GRAVITY -> 0f;
+                };
             }
 
             Vector2 gravityVector2 = new Vector2();
             switch (directionRotation) {
-                case UP:
-                    gravityVector2.set(0, gravity);
-                    break;
-                case DOWN:
-                    gravityVector2.set(0, -gravity);
-                    break;
-                case LEFT:
-                    gravityVector2.set(gravity, 0);
-                    break;
-                case RIGHT:
-                    gravityVector2.set(-gravity, 0);
-                    break;
+                case UP -> gravityVector2.set(0, gravity);
+                case DOWN -> gravityVector2.set(0, -gravity);
+                case LEFT -> gravityVector2.set(gravity, 0);
+                case RIGHT -> gravityVector2.set(-gravity, 0);
             }
-            body.getPhysics().getGravity().set(gravityVector2);
+            body.getPhysics().getGravity().set(gravityVector2.scl(ConstVals.PPM));
         });
 
         DrawableShapesComponent drawableShapesComponent = new DrawableShapesComponent(this, new Array<>(),
@@ -307,18 +304,45 @@ public class Player extends GameEntity implements IBodyEntity, IHealthEntity, IA
         BehaviorsComponent behaviorsComponent = new BehaviorsComponent(this);
 
         // TODO: create behaviors
+        Behavior jumpBehavior = new Behavior(
+                (delta) -> {
+                    if (isDamaged() || !getGame().getControllerPoller().isPressed(ControllerButton.A)) {
+                        return false;
+                    }
+                    if (isBehaviorActive(BehaviorType.JUMPING)) {
+                        Vector2 velocity = getBody().getPhysics().getVelocity();
+                        return switch (directionRotation) {
+                            case UP -> velocity.y > 0f;
+                            case DOWN -> velocity.y < 0f;
+                            case LEFT -> velocity.x < 0f;
+                            case RIGHT -> velocity.x > 0f;
+                        };
+                    } else {
+                        return aButtonTask == AButtonTask.JUMP &&
+                                getGame().getControllerPoller().isJustPressed(ControllerButton.A) &&
+                                (BodyExtensions.isBodySensing(getBody(), BodySense.FEET_ON_GROUND) ||
+                                        isBehaviorActive(BehaviorType.WALL_SLIDING));
+                    }
+                },
+                () -> getBody().getPhysics().getVelocity().y = GROUND_JUMP_IMPULSE * ConstVals.PPM,
+                null,
+                () -> getBody().getPhysics().getVelocity().y = 0f);
 
+        behaviorsComponent.addBehavior(BehaviorType.JUMPING, jumpBehavior);
         return behaviorsComponent;
     }
 
     private SpritesComponent defineSpritesComponent() {
-        GameSprite sprite = new GameSprite();
-        sprite.setSize(2.475f * ConstVals.PPM, 1.875f * ConstVals.PPM);
-        sprite.getPriority().setSection(DrawingSection.FOREGROUND);
-        sprite.getPriority().setPriority(1);
+        GameSprite playerSprite = new GameSprite(new DrawingPriority(DrawingSection.FOREGROUND, 1), false);
+        playerSprite.setSize(2.475f * ConstVals.PPM, 1.875f * ConstVals.PPM);
 
-        SpritesComponent spritesComponent = new SpritesComponent(this, new Pair<>(SpritesComponent.SPRITE, sprite));
-        spritesComponent.putUpdateFunction(SpritesComponent.SPRITE, (delta, gameSprite) -> {
+        GameSprite jetpackFlameSprite = new GameSprite(new DrawingPriority(DrawingSection.FOREGROUND, 0), false);
+        jetpackFlameSprite.setSize(0.5f * ConstVals.PPM, 0.5f * ConstVals.PPM);
+
+        SpritesComponent spritesComponent = new SpritesComponent(this,
+                new Pair<>("player", playerSprite), new Pair<>("jetpackFlame", jetpackFlameSprite));
+
+        spritesComponent.putUpdateFunction("player", (delta, gameSprite) -> {
             gameSprite.setFlip(facing == Facing.LEFT, false);
             gameSprite.setAlpha(damageFlash ? 0f : 1f);
 
@@ -326,36 +350,39 @@ public class Player extends GameEntity implements IBodyEntity, IHealthEntity, IA
             gameSprite.setOriginCenter();
             gameSprite.setRotation(rotation);
 
-            Position position;
-            switch (directionRotation) {
-                case UP:
-                    position = Position.BOTTOM_CENTER;
-                    break;
-                case DOWN:
-                    position = Position.TOP_CENTER;
-                    break;
-                case LEFT:
-                    position = Position.CENTER_RIGHT;
-                    break;
-                case RIGHT:
-                    position = Position.CENTER_LEFT;
-                    break;
-                default:
-                    throw new IllegalStateException("Unexpected value: " + directionRotation);
-            }
+            Position position = switch (directionRotation) {
+                case UP -> Position.BOTTOM_CENTER;
+                case DOWN -> Position.TOP_CENTER;
+                case LEFT -> Position.CENTER_RIGHT;
+                case RIGHT -> Position.CENTER_LEFT;
+            };
             Vector2 bodyPosition = getBounds().getPositionPoint(position);
             SpriteExtensionsKt.setPosition(gameSprite, bodyPosition, position);
+        });
+
+        spritesComponent.putUpdateFunction("jetpackFlame", (delta, gameSprite) -> {
+            gameSprite.setHidden(!isBehaviorActive(BehaviorType.JETPACKING));
+
+            float rotation = directionRotation.getRotation();
+            gameSprite.setOriginCenter();
+            gameSprite.setRotation(rotation);
+
+            Vector2 offset = (switch (directionRotation) {
+                case UP -> new Vector2(0f, -0.25f);
+                case DOWN -> new Vector2(0f, 0.25f);
+                case LEFT -> new Vector2(-0.25f, 0f);
+                case RIGHT -> new Vector2(0.25f, 0f);
+            }).scl(ConstVals.PPM);
+            Vector2 position = getBounds().getPositionPoint(Position.CENTER).add(offset);
+            SpriteExtensionsKt.setPosition(gameSprite, position, Position.CENTER);
         });
         return spritesComponent;
     }
 
     private AnimationsComponent defineAnimationsComponent() {
         Supplier<String> keySupplier = () -> {
-            if (isDamaged()) {
-                return "damaged";
-            }
-            if (isShooting()) {
-                return "stand-shoot";
+            if (!BodyExtensions.isBodySensing(getBody(), BodySense.FEET_ON_GROUND)) {
+                return "jump";
             }
             if (running) {
                 return "run";
@@ -369,6 +396,7 @@ public class Player extends GameEntity implements IBodyEntity, IHealthEntity, IA
 
         ObjectMap<String, IAnimation> animations = new ObjectMap<>();
         animations.put("stand", new Animation(regions.get("stand")));
+        animations.put("jump", new Animation(regions.get("jump")));
         animations.put("run", new Animation(regions.get("run"), 2, 2, 0.175f, true));
         animations.put("slip", new Animation(regions.get("slip")));
         animations.put("stand-shoot", new Animation(regions.get("stand-shoot")));
@@ -379,8 +407,7 @@ public class Player extends GameEntity implements IBodyEntity, IHealthEntity, IA
 
     private PointsComponent definePointsComponent() {
         PointsComponent pointsComponent = new PointsComponent(this);
-        pointsComponent.putPoints(ConstKeys.HEALTH, ConstVals.MIN_HEALTH,
-                ConstVals.MAX_HEALTH, ConstVals.MAX_HEALTH);
+        pointsComponent.putPoints(ConstKeys.HEALTH, ConstVals.MIN_HEALTH, ConstVals.MAX_HEALTH, ConstVals.MAX_HEALTH);
         pointsComponent.putListener(ConstKeys.HEALTH, it -> {
             if (it.getCurrent() <= ConstVals.MIN_HEALTH) {
                 kill(null);
@@ -403,12 +430,16 @@ public class Player extends GameEntity implements IBodyEntity, IHealthEntity, IA
                         return;
                     }
 
-                    facing = Facing.LEFT;
-                    // facing = isBehaviorActive(BehaviorType.WALL_SLIDE) ? Facing.RIGHT : Facing.LEFT;
-                    running = !isBehaviorActive(BehaviorType.WALL_SLIDE);
+                    facing = isBehaviorActive(BehaviorType.WALL_SLIDING) ? Facing.RIGHT : Facing.LEFT;
+                    running = !isBehaviorActive(BehaviorType.WALL_SLIDING);
 
                     // TODO: threshold and impulse should be dynamic based on the current player state
-                    float threshold = MAX_RUN_SPEED * ConstVals.PPM;
+                    float threshold;
+                    if (BodyExtensions.isBodySensing(getBody(), BodySense.FEET_ON_GROUND)) {
+                        threshold = MAX_GROUND_RUN_SPEED * ConstVals.PPM;
+                    } else {
+                        threshold = MAX_AIR_RUN_SPEED * ConstVals.PPM;
+                    }
                     float impulse = RUN_IMPULSE * ConstVals.PPM;
                     Vector2 velocity = getBody().getPhysics().getVelocity();
                     if (velocity.x > -threshold) {
@@ -433,12 +464,16 @@ public class Player extends GameEntity implements IBodyEntity, IHealthEntity, IA
                         return;
                     }
 
-                    facing = Facing.RIGHT;
-                    // facing = isBehaviorActive(BehaviorType.WALL_SLIDE) ? Facing.LEFT : Facing.RIGHT;
-                    running = !isBehaviorActive(BehaviorType.WALL_SLIDE);
+                    facing = isBehaviorActive(BehaviorType.WALL_SLIDING) ? Facing.LEFT : Facing.RIGHT;
+                    running = !isBehaviorActive(BehaviorType.WALL_SLIDING);
 
                     // TODO: threshold and impulse should be dynamic based on the current player state
-                    float threshold = MAX_RUN_SPEED * ConstVals.PPM;
+                    float threshold;
+                    if (BodyExtensions.isBodySensing(getBody(), BodySense.FEET_ON_GROUND)) {
+                        threshold = MAX_GROUND_RUN_SPEED * ConstVals.PPM;
+                    } else {
+                        threshold = MAX_AIR_RUN_SPEED * ConstVals.PPM;
+                    }
                     float impulse = RUN_IMPULSE * ConstVals.PPM;
                     Vector2 velocity = getBody().getPhysics().getVelocity();
                     if (velocity.x < threshold) {
