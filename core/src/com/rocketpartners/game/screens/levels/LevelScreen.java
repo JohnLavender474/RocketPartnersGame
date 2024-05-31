@@ -33,6 +33,7 @@ import com.engine.spawns.SpawnsManager;
 import com.engine.systems.IGameSystem;
 import com.engine.updatables.UpdatablesSystem;
 import com.engine.world.WorldSystem;
+import com.rocketpartners.game.Constants;
 import com.rocketpartners.game.RocketPartnersGame;
 import com.rocketpartners.game.assets.MusicAsset;
 import com.rocketpartners.game.assets.SoundAsset;
@@ -45,12 +46,14 @@ import com.rocketpartners.game.screens.levels.camera.CameraManagerForRooms;
 import com.rocketpartners.game.screens.levels.events.PlayerSpawnEventHandler;
 import com.rocketpartners.game.screens.levels.map.MapBuilder;
 import com.rocketpartners.game.screens.levels.spawns.PlayerSpawnsManager;
+import com.rocketpartners.game.utils.ConstFuncs;
 import lombok.Getter;
 import lombok.Setter;
 import org.jetbrains.annotations.NotNull;
 
 import java.util.PriorityQueue;
 
+import static com.rocketpartners.game.Constants.*;
 import static com.rocketpartners.game.Constants.ConstKeys;
 import static com.rocketpartners.game.Constants.ConstVals;
 
@@ -177,6 +180,9 @@ public class LevelScreen extends TiledMapLevelScreen {
         playerSpawnEventHandler.init();
 
         // TODO: set background and foreground parallax
+
+        backgroundCamera.position.set(ConstFuncs.getCamInitPos());
+        gameCamera.position.set(ConstFuncs.getCamInitPos());
     }
 
     @NotNull
@@ -187,10 +193,12 @@ public class LevelScreen extends TiledMapLevelScreen {
 
     @Override
     protected void buildLevel(@NotNull Properties properties) {
+        backgrounds = (Array<Background>) properties.get(ConstKeys.BACKGROUNDS);
+        if (backgrounds == null) {
+            backgrounds = new Array<>();
+        }
         // TODO:
         /*
-        backgrounds = (Array<Background>) properties.get(Constants.ConstKeys.BACKGROUNDS);
-
         Array<RectangleMapObject> rooms = (Array<RectangleMapObject>) properties.get(Constants.ConstKeys.ROOMS);
         cameraManagerForRooms.setRooms(rooms);
 

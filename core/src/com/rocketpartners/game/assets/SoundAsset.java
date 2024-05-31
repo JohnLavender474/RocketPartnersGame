@@ -10,6 +10,8 @@ import org.jetbrains.annotations.NotNull;
 @RequiredArgsConstructor(access = AccessLevel.PRIVATE)
 public enum SoundAsset implements IAsset {
     PAUSE_SOUND("pause_menu.mp3", 1),
+    JETPACK_SOUND("jetpack.wav", 1),
+    JETDASH_SOUND("jetdash.wav", 1),
     PLAYER_DAMAGE_SOUND("player_damage.mp3", 1);
 
     public static final String SOUND_ASSET_PREFIX = "sounds/";

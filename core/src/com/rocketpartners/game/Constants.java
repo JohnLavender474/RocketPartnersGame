@@ -9,6 +9,9 @@ public class Constants {
     }
 
     public static class ConstKeys {
+        public static final String LEFT = "left";
+        public static final String RIGHT = "right";
+        public static final String SIDE_TYPE = "side_type";
         public static final String GAME = "game";
         public static final String BACKGROUND = "background";
         public static final String UI = "ui";
@@ -37,6 +40,10 @@ public class Constants {
         public static final String GRAVITY_TYPE = "gravity_type";
         public static final String GRAVITY_DIRECTION = "gravity_direction";
         public static final String BODY_SENSES = "body_senses";
+        public static final String ATLAS = "atlas";
+        public static final String REGION = "region";
+        public static final String ROWS = "rows";
+        public static final String COLUMNS = "columns";
     }
 
     public static class ConstVals {

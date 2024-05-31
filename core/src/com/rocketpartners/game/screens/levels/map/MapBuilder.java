@@ -6,10 +6,7 @@ import com.engine.screens.levels.tiledmap.builders.TiledMapLayerBuilders;
 import com.engine.spawns.SpawnsManager;
 import com.rocketpartners.game.RocketPartnersGame;
 import com.rocketpartners.game.screens.levels.camera.CameraManagerForRooms;
-import com.rocketpartners.game.screens.levels.map.layers.AbstractBoundsLayer;
-import com.rocketpartners.game.screens.levels.map.layers.PlayerSpawnsLayer;
-import com.rocketpartners.game.screens.levels.map.layers.RoomsLayer;
-import com.rocketpartners.game.screens.levels.map.layers.WorldBlocksLayer;
+import com.rocketpartners.game.screens.levels.map.layers.*;
 import com.rocketpartners.game.screens.levels.spawns.PlayerSpawnsManager;
 import lombok.RequiredArgsConstructor;
 import org.jetbrains.annotations.NotNull;
@@ -21,6 +18,7 @@ public class MapBuilder extends TiledMapLayerBuilders {
     private static final String ABSTRACT_BOUNDS_LAYER = "abstract_bounds";
     private static final String WORLD_BLOCKS_LAYER = "world_blocks";
     private static final String PLAYER_SPAWNS_LAYER = "player_spawns";
+    private static final String BACKGROUNDS_LAYER = "backgrounds";
 
     private final RocketPartnersGame game;
     private final CameraManagerForRooms cameraManagerForRooms;
@@ -35,6 +33,7 @@ public class MapBuilder extends TiledMapLayerBuilders {
         layerBuildersMap.put(ABSTRACT_BOUNDS_LAYER, new AbstractBoundsLayer(game));
         layerBuildersMap.put(WORLD_BLOCKS_LAYER, new WorldBlocksLayer(game));
         layerBuildersMap.put(PLAYER_SPAWNS_LAYER, new PlayerSpawnsLayer(playerSpawnsMan));
+        layerBuildersMap.put(BACKGROUNDS_LAYER, new BackgroundsLayer(game));
         return layerBuildersMap;
     }
 }

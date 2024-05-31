@@ -71,6 +71,7 @@ import java.util.PriorityQueue;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
 
+import static com.engine.common.extensions.ObjectSetExtensionsKt.*;
 import static com.rocketpartners.game.Constants.*;
 
 @Getter
@@ -104,7 +105,7 @@ public final class RocketPartnersGame extends Game2D implements IEventListener {
         controllerPoller = new ControllerPoller(buttons);
         assMan = new AssetManager();
         eventsMan = new EventsManager();
-        eventKeyMask = ObjectSetExtensionsKt.objectSetOf(EventType.TURN_CONTROLLER_ON, EventType.TURN_CONTROLLER_OFF);
+        eventKeyMask = objectSetOf(EventType.TURN_CONTROLLER_ON, EventType.TURN_CONTROLLER_OFF);
 
         loadAssets(assMan);
         // TODO: instead of immediately finishing loading, should show progress bar and lock game until
@@ -169,13 +170,12 @@ public final class RocketPartnersGame extends Game2D implements IEventListener {
 
     private static IGameEngine createEngine(RocketPartnersGame game) {
         ObjectMap<Object, ObjectSet<Object>> worldFilterMap = new ObjectMap<>();
-        worldFilterMap.put(FixtureType.FEET, ObjectSetExtensionsKt.objectSetOf(FixtureType.WORLD_BLOCK));
-        worldFilterMap.put(FixtureType.PLAYER, ObjectSetExtensionsKt.objectSetOf(FixtureType.ITEM));
-        worldFilterMap.put(FixtureType.DAMAGEABLE, ObjectSetExtensionsKt.objectSetOf(FixtureType.DAMAGER));
+        worldFilterMap.put(FixtureType.WORLD_BLOCK, objectSetOf(FixtureType.FEET, FixtureType.SIDE));
+        worldFilterMap.put(FixtureType.PLAYER, objectSetOf(FixtureType.ITEM));
+        worldFilterMap.put(FixtureType.DAMAGEABLE, objectSetOf(FixtureType.DAMAGER));
 
         return new GameEngine(
                 new ControllerSystem(game.getControllerPoller()),
-                new BehaviorsSystem(),
                 new WorldSystem(
                         new ContactListener(game),
                         (Supplier<IGraphMap>) game::getGraphMap,
@@ -183,6 +183,7 @@ public final class RocketPartnersGame extends Game2D implements IEventListener {
                         new CollisionHandler(game),
                         worldFilterMap,
                         true),
+                new BehaviorsSystem(),
                 new CullablesSystem(),
                 new PathfindingSystem(
                         (component) -> new Pathfinder(game.getGraphMap(), component.getParams()),

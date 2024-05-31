@@ -25,7 +25,6 @@ import com.engine.common.shapes.GameRectangle;
 import com.engine.common.time.Timer;
 import com.engine.controller.ControllerComponent;
 import com.engine.controller.buttons.ButtonActuator;
-import com.engine.controller.polling.ControllerPoller;
 import com.engine.controller.polling.IControllerPoller;
 import com.engine.damage.IDamageable;
 import com.engine.damage.IDamager;
@@ -79,26 +78,26 @@ public class Player extends GameEntity implements IBodyEntity, IHealthEntity, IA
 
     public static class JetpackStamina implements Updatable, Resettable {
 
-        public static final float JETPACK_IMPULSE_DURATION = 3f;
-        public static final float JETPACK_RECOVERY_DELAY = 0.2f;
+        public static final float JETPACK_THRUST_DURATION = 5f;
+        public static final float JETPACK_RECOVERY_DELAY = 0.1f;
         public static final float JETPACK_RECOVERY_RATE = 4f;
 
         private final Timer jetpackRecoveryDelayTimer;
 
-        private float impulseTime;
+        private float thrustTime;
         private boolean jetpacking;
 
         public JetpackStamina() {
             jetpackRecoveryDelayTimer = new Timer(JETPACK_RECOVERY_DELAY);
-            impulseTime = 0f;
+            thrustTime = 0f;
         }
 
-        public boolean canImpulse() {
-            return impulseTime < JETPACK_IMPULSE_DURATION;
+        public boolean hasStamina() {
+            return thrustTime < JETPACK_THRUST_DURATION;
         }
 
         public float getImpulseRatio() {
-            return impulseTime / JETPACK_IMPULSE_DURATION;
+            return thrustTime / JETPACK_THRUST_DURATION;
         }
 
         public void setJetpacking(boolean jetpacking) {
@@ -111,19 +110,19 @@ public class Player extends GameEntity implements IBodyEntity, IHealthEntity, IA
         @Override
         public void update(float delta) {
             if (jetpacking) {
-                impulseTime += delta;
-                impulseTime = Math.min(JETPACK_IMPULSE_DURATION, impulseTime);
+                thrustTime += delta;
+                thrustTime = Math.min(JETPACK_THRUST_DURATION, thrustTime);
             } else {
                 jetpackRecoveryDelayTimer.update(delta);
                 if (jetpackRecoveryDelayTimer.isFinished()) {
-                    impulseTime = Math.max(0f, impulseTime - JETPACK_RECOVERY_RATE * delta);
+                    thrustTime = Math.max(0f, thrustTime - JETPACK_RECOVERY_RATE * delta);
                 }
             }
         }
 
         @Override
         public void reset() {
-            impulseTime = 0f;
+            thrustTime = 0f;
             jetpacking = false;
             jetpackRecoveryDelayTimer.reset();
         }
@@ -140,8 +139,8 @@ public class Player extends GameEntity implements IBodyEntity, IHealthEntity, IA
 
     private static final float JETPACK_IMPULSE = 2f;
 
-    private static final float JETDASH_IMPULSE = 10f;
-    private static final float JETDASH_DURATION = 0.5f;
+    private static final float JETDASH_IMPULSE = 8f;
+    private static final float JETDASH_DELTA_SCALAR = 2.5f;
 
     private static final float BRAKE_DURATION = 0.2f;
 
@@ -151,6 +150,10 @@ public class Player extends GameEntity implements IBodyEntity, IHealthEntity, IA
 
     private static final float RUN_IMPULSE = 1.5f;
     private static final float GROUND_JUMP_IMPULSE = 15f;
+
+
+    private static final float WALL_JUMP_VERTICAL = 30f;
+    private static final float WALL_JUMP_HORIZONTAL = 7f;
 
     private static final float SLIP_ANIMATION_THRESHOLD = 0.3f;
 
@@ -164,9 +167,6 @@ public class Player extends GameEntity implements IBodyEntity, IHealthEntity, IA
     private boolean running;
     private boolean invincible;
     private boolean damageFlash;
-    @Getter
-    @Setter
-    private boolean allowedToJetDash;
 
     private Facing facing;
     private JetpackStamina jetpackStamina;
@@ -184,7 +184,6 @@ public class Player extends GameEntity implements IBodyEntity, IHealthEntity, IA
         timers.put("damage", new Timer(DAMAGE_DURATION));
         timers.put("damage_recovery", new Timer(DAMAGE_RECOVERY_TIME));
         timers.put("damage_flash", new Timer(DAMAGE_FLASH_DURATION));
-        timers.put("jetdash", new Timer(JETDASH_DURATION));
         timers.put("brake", new Timer(BRAKE_DURATION));
 
         if (damageNegotiations == null) {
@@ -210,6 +209,7 @@ public class Player extends GameEntity implements IBodyEntity, IHealthEntity, IA
             regions.put("jetdash", atlas.findRegion("thrust"));
             regions.put("damaged", atlas.findRegion("damaged"));
             regions.put("jetpackFlame", atlas.findRegion("jetpackFlame"));
+            regions.put("wallslide", atlas.findRegion("wallslide"));
         }
         addComponent(new AudioComponent(this));
         addComponent(defineBodyComponent());
@@ -254,8 +254,6 @@ public class Player extends GameEntity implements IBodyEntity, IHealthEntity, IA
 
         invincible = false;
         damageFlash = false;
-
-        allowedToJetDash = false;
 
         facing = Facing.RIGHT;
         directionRotation = Direction.UP;
@@ -314,8 +312,8 @@ public class Player extends GameEntity implements IBodyEntity, IHealthEntity, IA
     private BodyComponent defineBodyComponent() {
         Body body = Body.Companion.createBody(BodyType.DYNAMIC);
         body.setColor(Color.BROWN);
-        body.width = 0.75f * ConstVals.PPM;
-        body.height = 0.95f * ConstVals.PPM;
+        body.width = 0.85f * ConstVals.PPM;
+        body.height = 1.25f * ConstVals.PPM;
         PhysicsData physicsData = body.getPhysics();
         physicsData.setVelocityClamp(new Vector2(CLAMP_VEL_X, CLAMP_VEL_Y).scl(ConstVals.PPM));
         physicsData.setTakeFrictionFromOthers(true);
@@ -329,10 +327,26 @@ public class Player extends GameEntity implements IBodyEntity, IHealthEntity, IA
 
         Fixture feetFixture = Fixture.Companion.createFixture(body, FixtureType.FEET,
                 new GameRectangle().setSize(0.6f * ConstVals.PPM, 0.1f * ConstVals.PPM));
-        feetFixture.getOffsetFromBodyCenter().y = -0.5f * ConstVals.PPM;
+        feetFixture.getOffsetFromBodyCenter().y = -0.625f * ConstVals.PPM;
         body.addFixture(feetFixture);
         feetFixture.getRawShape().setColor(Color.GREEN);
         debugShapesSupplier.add(feetFixture::getShape);
+
+        Fixture leftFixture = Fixture.Companion.createFixture(body, FixtureType.SIDE,
+                new GameRectangle().setSize(0.1f * ConstVals.PPM, 0.5f * ConstVals.PPM));
+        leftFixture.putProperty(ConstKeys.SIDE_TYPE, ConstKeys.LEFT);
+        leftFixture.getOffsetFromBodyCenter().x = -0.425f * ConstVals.PPM;
+        body.addFixture(leftFixture);
+        leftFixture.getRawShape().setColor(Color.YELLOW);
+        debugShapesSupplier.add(leftFixture::getShape);
+
+        Fixture rightFixture = Fixture.Companion.createFixture(body, FixtureType.SIDE,
+                new GameRectangle().setSize(0.1f * ConstVals.PPM, 0.5f * ConstVals.PPM));
+        rightFixture.putProperty(ConstKeys.SIDE_TYPE, ConstKeys.RIGHT);
+        rightFixture.getOffsetFromBodyCenter().x = 0.425f * ConstVals.PPM;
+        body.addFixture(rightFixture);
+        rightFixture.getRawShape().setColor(Color.YELLOW);
+        debugShapesSupplier.add(rightFixture::getShape);
 
         // TODO: define other fixtures
 
@@ -397,6 +411,29 @@ public class Player extends GameEntity implements IBodyEntity, IHealthEntity, IA
     private BehaviorsComponent defineBehaviorsComponent() {
         BehaviorsComponent behaviorsComponent = new BehaviorsComponent(this);
 
+        Behavior wallslideBehavior = new Behavior(
+                (delta) -> {
+                    if (isDamaged() || BodyExtensions.isBodySensing(getBody(), BodySense.FEET_ON_GROUND) ||
+                            isAnyBehaviorActive(BehaviorType.JUMPING, BehaviorType.JETDASHING,
+                                    BehaviorType.JETPACKING)) {
+                        return false;
+                    }
+
+                    IControllerPoller controllerPoller = getGame().getControllerPoller();
+                    boolean left = BodyExtensions.isBodySensing(getBody(), BodySense.SIDE_TOUCHING_BLOCK_LEFT) &&
+                            controllerPoller.isPressed(ControllerButton.LEFT);
+                    boolean right = BodyExtensions.isBodySensing(getBody(), BodySense.SIDE_TOUCHING_BLOCK_RIGHT) &&
+                            controllerPoller.isPressed(ControllerButton.RIGHT);
+                    return left || right;
+                },
+                () -> {
+                    aButtonTask = AButtonTask.JUMP;
+                },
+                (delta) -> getBody().getPhysics().getFrictionOnSelf().y += 1.2f,
+                () -> aButtonTask = AButtonTask.JETPACK
+        );
+        behaviorsComponent.addBehavior(BehaviorType.WALL_SLIDING, wallslideBehavior);
+
         Behavior jumpBehavior = new Behavior(
                 (delta) -> {
                     IControllerPoller controllerPoller = getGame().getControllerPoller();
@@ -421,12 +458,17 @@ public class Player extends GameEntity implements IBodyEntity, IHealthEntity, IA
                 },
                 () -> {
                     Vector2 velocity = getBody().getPhysics().getVelocity();
-                    if (velocity.x > MAX_JUMP_RUN_SPEED * ConstVals.PPM) {
-                        velocity.x = MAX_JUMP_RUN_SPEED * ConstVals.PPM;
-                    } else if (velocity.x < -MAX_JUMP_RUN_SPEED * ConstVals.PPM) {
-                        velocity.x = -MAX_JUMP_RUN_SPEED * ConstVals.PPM;
+                    if (isBehaviorActive(BehaviorType.WALL_SLIDING)) {
+                        velocity.x = WALL_JUMP_HORIZONTAL * ConstVals.PPM * facing.getValue();
+                        velocity.y = WALL_JUMP_VERTICAL * ConstVals.PPM;
+                    } else {
+                        if (velocity.x > MAX_JUMP_RUN_SPEED * ConstVals.PPM) {
+                            velocity.x = MAX_JUMP_RUN_SPEED * ConstVals.PPM;
+                        } else if (velocity.x < -MAX_JUMP_RUN_SPEED * ConstVals.PPM) {
+                            velocity.x = -MAX_JUMP_RUN_SPEED * ConstVals.PPM;
+                        }
+                        velocity.y = GROUND_JUMP_IMPULSE * ConstVals.PPM;
                     }
-                    velocity.y = GROUND_JUMP_IMPULSE * ConstVals.PPM;
                 },
                 null,
                 () -> getBody().getPhysics().getVelocity().y = 0f);
@@ -435,7 +477,7 @@ public class Player extends GameEntity implements IBodyEntity, IHealthEntity, IA
         Behavior jetpackBehavior = new Behavior(
                 (delta) -> {
                     IControllerPoller controllerPoller = getGame().getControllerPoller();
-                    if (isDamaged() || !jetpackStamina.canImpulse() ||
+                    if (isDamaged() || !jetpackStamina.hasStamina() ||
                             !controllerPoller.isPressed(ControllerButton.A) ||
                             BodyExtensions.isBodySensing(getBody(), BodySense.FEET_ON_GROUND) ||
                             isAnyBehaviorActive(BehaviorType.WALL_SLIDING, BehaviorType.JETDASHING)) {
@@ -450,10 +492,13 @@ public class Player extends GameEntity implements IBodyEntity, IHealthEntity, IA
                     }
                 },
                 () -> {
-                    jetpackStamina.setJetpacking(true);
-                    getBody().getPhysics().setGravityOn(false);
+                    requestToPlaySound(SoundAsset.JETPACK_SOUND, true);
 
-                    Vector2 velocity = getBody().getPhysics().getVelocity();
+                    jetpackStamina.setJetpacking(true);
+
+                    PhysicsData physicsData = getBody().getPhysics();
+                    physicsData.setGravityOn(false);
+                    Vector2 velocity = physicsData.getVelocity();
                     if (velocity.x > MAX_JETPACK_RUN_SPEED * ConstVals.PPM) {
                         velocity.x = MAX_JETPACK_RUN_SPEED * ConstVals.PPM;
                     } else if (velocity.x < -MAX_JETPACK_RUN_SPEED * ConstVals.PPM) {
@@ -462,11 +507,15 @@ public class Player extends GameEntity implements IBodyEntity, IHealthEntity, IA
                 },
                 (delta) -> {
                     jetpackStamina.update(delta);
+
                     PhysicsData physicsData = getBody().getPhysics();
                     physicsData.getVelocity().y = JETPACK_IMPULSE * ConstVals.PPM;
                 },
                 () -> {
+                    ((RocketPartnersGame) getGame()).getAudioMan().stopSound(SoundAsset.JETPACK_SOUND);
+
                     jetpackStamina.setJetpacking(false);
+
                     getBody().getPhysics().setGravityOn(true);
                 }
         );
@@ -475,8 +524,7 @@ public class Player extends GameEntity implements IBodyEntity, IHealthEntity, IA
         Behavior jetdashBehavior = new Behavior(
                 (delta) -> {
                     IControllerPoller controllerPoller = getGame().getControllerPoller();
-                    Timer jetdashTimer = timers.get("jetdash");
-                    if (!isAllowedToJetDash() || jetdashTimer.isFinished() || isDamaged() ||
+                    if (!jetpackStamina.hasStamina() || isDamaged() ||
                             !controllerPoller.isPressed(ControllerButton.Y) ||
                             BodyExtensions.isBodySensing(getBody(), BodySense.FEET_ON_GROUND) ||
                             isBehaviorActive(BehaviorType.WALL_SLIDING)) {
@@ -486,22 +534,26 @@ public class Player extends GameEntity implements IBodyEntity, IHealthEntity, IA
                             controllerPoller.isJustPressed(ControllerButton.Y);
                 },
                 () -> {
+                    requestToPlaySound(SoundAsset.JETDASH_SOUND, false);
+
+                    jetpackStamina.setJetpacking(true);
+
                     PhysicsData physicsData = getBody().getPhysics();
                     physicsData.setGravityOn(false);
                     physicsData.setVelocity(new Vector2(JETDASH_IMPULSE * ConstVals.PPM * facing.getValue(), 0f));
                 },
                 (delta) -> {
-                    Timer jetdashTimer = timers.get("jetdash");
-                    jetdashTimer.update(delta);
+                    jetpackStamina.update(JETDASH_DELTA_SCALAR * delta);
+
                     PhysicsData physicsData = getBody().getPhysics();
                     physicsData.setVelocity(new Vector2(JETDASH_IMPULSE * ConstVals.PPM * facing.getValue(), 0f));
                 },
                 () -> {
-                    Timer jetdashTimer = timers.get("jetdash");
-                    jetdashTimer.reset();
+                    jetpackStamina.setJetpacking(false);
+
                     PhysicsData physicsData = getBody().getPhysics();
                     physicsData.setGravityOn(true);
-                    setAllowedToJetDash(false);
+
                     Timer brakeTimer = timers.get("brake");
                     brakeTimer.reset();
                 }
@@ -537,27 +589,28 @@ public class Player extends GameEntity implements IBodyEntity, IHealthEntity, IA
             };
             Vector2 bodyPosition = getBounds().getPositionPoint(position);
             SpriteExtensionsKt.setPosition(gameSprite, bodyPosition, position);
+
+            if (isBehaviorActive(BehaviorType.WALL_SLIDING)) {
+                float offsetX = -0.2f * ConstVals.PPM * facing.getValue();
+                gameSprite.translate(offsetX, 0f);
+            }
         });
 
         spritesComponent.putUpdateFunction("jetpackFlame", (delta, gameSprite) -> {
             gameSprite.setHidden(!isAnyBehaviorActive(BehaviorType.JETPACKING, BehaviorType.JETDASHING));
             gameSprite.setOriginCenter();
 
+            float facingOffset;
+            float verticalOffset;
             if (isBehaviorActive(BehaviorType.JETPACKING)) {
                 float rotation = directionRotation.getRotation();
                 gameSprite.setRotation(rotation);
                 gameSprite.setFlip(false, false);
-            } else {
-                gameSprite.setRotation(270f);
-                gameSprite.setFlip(facing == Facing.LEFT, false);
-            }
-
-            float facingOffset;
-            float verticalOffset;
-            if (isBehaviorActive(BehaviorType.JETPACKING)) {
                 facingOffset = -0.45f;
                 verticalOffset = -0.25f;
             } else {
+                gameSprite.setRotation(270f);
+                gameSprite.setFlip(facing == Facing.LEFT, false);
                 facingOffset = -0.65f;
                 verticalOffset = 0.1f;
             }
@@ -588,6 +641,9 @@ public class Player extends GameEntity implements IBodyEntity, IHealthEntity, IA
 
         Supplier<String> keySupplier = () -> {
             if (!BodyExtensions.isBodySensing(getBody(), BodySense.FEET_ON_GROUND)) {
+                if (isBehaviorActive(BehaviorType.WALL_SLIDING)) {
+                    return "wallslide";
+                }
                 if (isBehaviorActive(BehaviorType.JETDASHING)) {
                     return "jetdash";
                 }
@@ -612,6 +668,7 @@ public class Player extends GameEntity implements IBodyEntity, IHealthEntity, IA
         animations.put("stand", new Animation(regions.get("stand")));
         animations.put("jump", new Animation(regions.get("jump")));
         animations.put("run", new Animation(regions.get("run"), 2, 2, 0.175f, true));
+        animations.put("wallslide", new Animation(regions.get("wallslide")));
         animations.put("jetdash", new Animation(regions.get("jetdash"), 2, 2, 0.05f, false));
         animations.put("brake", new Animation(regions.get("brake"), 1, 2, 0.1f, false));
         animations.put("slip", new Animation(regions.get("slip")));
