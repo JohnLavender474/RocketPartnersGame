@@ -541,19 +541,36 @@ public class Player extends GameEntity implements IBodyEntity, IHealthEntity, IA
 
         spritesComponent.putUpdateFunction("jetpackFlame", (delta, gameSprite) -> {
             gameSprite.setHidden(!isAnyBehaviorActive(BehaviorType.JETPACKING, BehaviorType.JETDASHING));
-
-            float rotation = directionRotation.getRotation();
             gameSprite.setOriginCenter();
-            gameSprite.setRotation(rotation);
 
-            float facingOffset = facing == Facing.LEFT ? 0.45f : -0.45f;
+            if (isBehaviorActive(BehaviorType.JETPACKING)) {
+                float rotation = directionRotation.getRotation();
+                gameSprite.setRotation(rotation);
+                gameSprite.setFlip(false, false);
+            } else {
+                gameSprite.setRotation(270f);
+                gameSprite.setFlip(facing == Facing.LEFT, false);
+            }
+
+            float facingOffset;
+            float verticalOffset;
+            if (isBehaviorActive(BehaviorType.JETPACKING)) {
+                facingOffset = -0.45f;
+                verticalOffset = -0.25f;
+            } else {
+                facingOffset = -0.65f;
+                verticalOffset = 0.1f;
+            }
+            facingOffset *= facing.getValue();
+
             Vector2 offset = (switch (directionRotation) {
-                case UP -> new Vector2(facingOffset, -0.25f);
-                case DOWN -> new Vector2(facingOffset, 0.25f);
-                case LEFT -> new Vector2(-0.25f, facingOffset);
-                case RIGHT -> new Vector2(0.25f, -facingOffset);
+                case UP -> new Vector2(facingOffset, verticalOffset);
+                case DOWN -> new Vector2(facingOffset, -verticalOffset);
+                case LEFT -> new Vector2(verticalOffset, facingOffset);
+                case RIGHT -> new Vector2(-verticalOffset, -facingOffset);
             }).scl(ConstVals.PPM);
             Vector2 position = getBounds().getPositionPoint(Position.CENTER).add(offset);
+
             SpriteExtensionsKt.setPosition(gameSprite, position, Position.CENTER);
         });
         return spritesComponent;
