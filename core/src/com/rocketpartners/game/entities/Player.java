@@ -540,7 +540,7 @@ public class Player extends GameEntity implements IBodyEntity, IHealthEntity, IA
         });
 
         spritesComponent.putUpdateFunction("jetpackFlame", (delta, gameSprite) -> {
-            gameSprite.setHidden(!isBehaviorActive(BehaviorType.JETPACKING));
+            gameSprite.setHidden(!isAnyBehaviorActive(BehaviorType.JETPACKING, BehaviorType.JETDASHING));
 
             float rotation = directionRotation.getRotation();
             gameSprite.setOriginCenter();
