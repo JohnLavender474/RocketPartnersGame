@@ -7,7 +7,6 @@ import com.badlogic.gdx.audio.Sound;
 import com.badlogic.gdx.graphics.g2d.Batch;
 import com.badlogic.gdx.graphics.g2d.SpriteBatch;
 import com.badlogic.gdx.graphics.glutils.ShapeRenderer;
-import com.badlogic.gdx.scenes.scene2d.Stage;
 import com.badlogic.gdx.utils.Array;
 import com.badlogic.gdx.utils.ObjectMap;
 import com.badlogic.gdx.utils.ObjectSet;
@@ -59,6 +58,7 @@ import com.rocketpartners.game.events.EventType;
 import com.rocketpartners.game.screens.ScreenEnum;
 import com.rocketpartners.game.screens.levels.LevelEnum;
 import com.rocketpartners.game.screens.levels.LevelScreen;
+import com.rocketpartners.game.utils.BitmapFontHandleUtils;
 import com.rocketpartners.game.world.CollisionHandler;
 import com.rocketpartners.game.world.ContactListener;
 import com.rocketpartners.game.world.FixtureType;
@@ -71,11 +71,14 @@ import java.util.PriorityQueue;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
 
+import static com.rocketpartners.game.Constants.*;
+
 @Getter
 @Setter
 public final class RocketPartnersGame extends Game2D implements IEventListener {
 
     public static final boolean DEBUG_SHAPES = true;
+    public static final boolean DEBUG_TEXT = true;
 
     private ShapeRenderer shapeRenderer;
     private SpriteBatch batch;
@@ -85,13 +88,13 @@ public final class RocketPartnersGame extends Game2D implements IEventListener {
     private IEventsManager eventsMan;
     private IGameEngine engine;
     private ObjectSet<Object> eventKeyMask;
-    private Stage uiStage;
     private AudioManager audioMan;
     private IGraphMap graphMap;
     private ObjectMap<DrawingSection, PriorityQueue<IComparableDrawable<Batch>>> drawables;
     private PriorityQueue<IDrawableShape> shapes;
     private Player player;
     private ObjectMap<String, IGameSystem> systemsMap;
+    private BitmapFontHandle debugText;
 
     public void create() {
         shapeRenderer = new ShapeRenderer();
@@ -118,12 +121,14 @@ public final class RocketPartnersGame extends Game2D implements IEventListener {
         }
         audioMan = new AudioManager(sounds, music);
 
-        int screenWidth = Constants.ConstVals.VIEW_WIDTH * Constants.ConstVals.PPM;
-        int screenHeight = Constants.ConstVals.VIEW_HEIGHT * Constants.ConstVals.PPM;
+        int screenWidth = ConstVals.VIEW_WIDTH * ConstVals.PPM;
+        int screenHeight = ConstVals.VIEW_HEIGHT * ConstVals.PPM;
         Viewport backgroundViewport = new FitViewport(screenWidth, screenHeight);
-        getViewports().put(Constants.ConstKeys.BACKGROUND, backgroundViewport);
+        getViewports().put(ConstKeys.BACKGROUND, backgroundViewport);
         Viewport gameViewport = new FitViewport(screenWidth, screenHeight);
-        getViewports().put(Constants.ConstKeys.GAME, gameViewport);
+        getViewports().put(ConstKeys.GAME, gameViewport);
+        Viewport uiViewport = new FitViewport(screenWidth, screenHeight);
+        getViewports().put(ConstKeys.UI, uiViewport);
 
         drawables = new ObjectMap<>();
         for (DrawingSection section : DrawingSection.values()) {
@@ -139,12 +144,17 @@ public final class RocketPartnersGame extends Game2D implements IEventListener {
         player.init();
         player.setInitialized(true);
 
+        debugText = BitmapFontHandleUtils.create("Debug Text");
+
         // TODO: add screens
         ObjectMap<String, IScreen> screens = getScreens();
         screens.put(ScreenEnum.LEVEL_SCREEN.name(), new LevelScreen(this));
 
         startLevelScreen(LevelEnum.TEST1);
+    }
 
+    public void setDebugText(@NotNull String text) {
+        debugText.setTextSupplier(() -> text);
     }
 
     private static void loadAssets(AssetManager assetManager) {
@@ -169,15 +179,15 @@ public final class RocketPartnersGame extends Game2D implements IEventListener {
                 new WorldSystem(
                         new ContactListener(game),
                         (Supplier<IGraphMap>) game::getGraphMap,
-                        Constants.ConstVals.WORLD_TIME_STEP,
+                        ConstVals.WORLD_TIME_STEP,
                         new CollisionHandler(game),
                         worldFilterMap,
                         true),
                 new CullablesSystem(),
                 new PathfindingSystem(
                         (component) -> new Pathfinder(game.getGraphMap(), component.getParams()),
-                        Constants.ConstVals.PATHFINDER_TIMEOUT,
-                        Constants.ConstVals.PATHFINDER_TIMEOUT_UNIT),
+                        ConstVals.PATHFINDER_TIMEOUT,
+                        ConstVals.PATHFINDER_TIMEOUT_UNIT),
                 new PointsSystem(),
                 new UpdatablesSystem(),
                 new FontsSystem((Consumer<BitmapFontHandle>) (font) ->
@@ -221,5 +231,11 @@ public final class RocketPartnersGame extends Game2D implements IEventListener {
         super.render();
         float delta = Gdx.graphics.getDeltaTime();
         audioMan.update(delta);
+        if (DEBUG_TEXT) {
+            batch.setProjectionMatrix(getViewports().get(ConstKeys.UI).getCamera().combined);
+            batch.begin();
+            debugText.draw(batch);
+            batch.end();
+        }
     }
 }

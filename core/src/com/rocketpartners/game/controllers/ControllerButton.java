@@ -13,6 +13,7 @@ public enum ControllerButton {
     DOWN(Input.Keys.S),
     A(Input.Keys.K),
     B(Input.Keys.J),
+    Y(Input.Keys.L),
     START(Input.Keys.ENTER);
 
     private final int defaultKeyboardKey;

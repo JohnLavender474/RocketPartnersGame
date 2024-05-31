@@ -65,7 +65,7 @@ public class LevelScreen extends TiledMapLevelScreen {
     private PriorityQueue<IDrawableShape> shapes;
     private Camera backgroundCamera;
     private Camera gameCamera;
-    private Stage uiStage;
+    private Camera uiCamera;
     private Player player;
     private IGameEngine engine;
     private IEventsManager eventsMan;
@@ -93,7 +93,7 @@ public class LevelScreen extends TiledMapLevelScreen {
         shapes = ((RocketPartnersGame) getGame()).getShapes();
         backgroundCamera = getGame().getViewports().get(ConstKeys.BACKGROUND).getCamera();
         gameCamera = getGame().getViewports().get(ConstKeys.GAME).getCamera();
-        uiStage = ((RocketPartnersGame) getGame()).getUiStage();
+        uiCamera = getGame().getViewports().get(ConstKeys.UI).getCamera();
         player = ((RocketPartnersGame) getGame()).getPlayer();
         engine = getGame().getEngine();
         eventsMan = getGame().getEventsMan();
@@ -302,6 +302,8 @@ public class LevelScreen extends TiledMapLevelScreen {
             gameSprite.draw(batch);
         }
 
+        batch.end();
+
         // batch.setProjectionMatrix(uiStage.getCamera().combined);
 
         /*
@@ -309,8 +311,6 @@ public class LevelScreen extends TiledMapLevelScreen {
         entityStatsHandler.draw(batch)
         playerStatsHandler.draw(batch)
         */
-
-        batch.end();
 
         /*
         TODO:

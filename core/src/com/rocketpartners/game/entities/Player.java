@@ -18,11 +18,15 @@ import com.engine.common.enums.Position;
 import com.engine.common.extensions.ObjectSetExtensionsKt;
 import com.engine.common.interfaces.IBoundsSupplier;
 import com.engine.common.interfaces.IFaceable;
+import com.engine.common.interfaces.Resettable;
+import com.engine.common.interfaces.Updatable;
 import com.engine.common.objects.Properties;
 import com.engine.common.shapes.GameRectangle;
 import com.engine.common.time.Timer;
 import com.engine.controller.ControllerComponent;
 import com.engine.controller.buttons.ButtonActuator;
+import com.engine.controller.polling.ControllerPoller;
+import com.engine.controller.polling.IControllerPoller;
 import com.engine.damage.IDamageable;
 import com.engine.damage.IDamager;
 import com.engine.drawables.shapes.DrawableShapesComponent;
@@ -39,6 +43,7 @@ import com.engine.events.IEventListener;
 import com.engine.points.PointsComponent;
 import com.engine.updatables.UpdatablesComponent;
 import com.engine.world.*;
+import com.rocketpartners.game.RocketPartnersGame;
 import com.rocketpartners.game.assets.SoundAsset;
 import com.rocketpartners.game.assets.SpriteSheetAsset;
 import com.rocketpartners.game.behaviors.BehaviorType;
@@ -72,6 +77,58 @@ public class Player extends GameEntity implements IBodyEntity, IHealthEntity, IA
         JETPACK
     }
 
+    public static class JetpackStamina implements Updatable, Resettable {
+
+        public static final float JETPACK_IMPULSE_DURATION = 3f;
+        public static final float JETPACK_RECOVERY_DELAY = 0.2f;
+        public static final float JETPACK_RECOVERY_RATE = 4f;
+
+        private final Timer jetpackRecoveryDelayTimer;
+
+        private float impulseTime;
+        private boolean jetpacking;
+
+        public JetpackStamina() {
+            jetpackRecoveryDelayTimer = new Timer(JETPACK_RECOVERY_DELAY);
+            impulseTime = 0f;
+        }
+
+        public boolean canImpulse() {
+            return impulseTime < JETPACK_IMPULSE_DURATION;
+        }
+
+        public float getImpulseRatio() {
+            return impulseTime / JETPACK_IMPULSE_DURATION;
+        }
+
+        public void setJetpacking(boolean jetpacking) {
+            this.jetpacking = jetpacking;
+            if (jetpacking) {
+                jetpackRecoveryDelayTimer.reset();
+            }
+        }
+
+        @Override
+        public void update(float delta) {
+            if (jetpacking) {
+                impulseTime += delta;
+                impulseTime = Math.min(JETPACK_IMPULSE_DURATION, impulseTime);
+            } else {
+                jetpackRecoveryDelayTimer.update(delta);
+                if (jetpackRecoveryDelayTimer.isFinished()) {
+                    impulseTime = Math.max(0f, impulseTime - JETPACK_RECOVERY_RATE * delta);
+                }
+            }
+        }
+
+        @Override
+        public void reset() {
+            impulseTime = 0f;
+            jetpacking = false;
+            jetpackRecoveryDelayTimer.reset();
+        }
+    }
+
     private static final float SHOOT_ANIMATION_DURATION = 0.3f;
 
     private static final float DAMAGE_DURATION = 0.75f;
@@ -81,8 +138,12 @@ public class Player extends GameEntity implements IBodyEntity, IHealthEntity, IA
     private static final float CLAMP_VEL_X = 25f;
     private static final float CLAMP_VEL_Y = 50f;
 
-    private static final float JETPACK_DURATION = 2f;
     private static final float JETPACK_IMPULSE = 2f;
+
+    private static final float JETDASH_IMPULSE = 10f;
+    private static final float JETDASH_DURATION = 0.5f;
+
+    private static final float BRAKE_DURATION = 0.2f;
 
     private static final float MAX_GROUND_RUN_SPEED = 9f;
     private static final float MAX_JUMP_RUN_SPEED = 4f;
@@ -103,8 +164,12 @@ public class Player extends GameEntity implements IBodyEntity, IHealthEntity, IA
     private boolean running;
     private boolean invincible;
     private boolean damageFlash;
+    @Getter
+    @Setter
+    private boolean allowedToJetDash;
 
     private Facing facing;
+    private JetpackStamina jetpackStamina;
     private Direction directionRotation;
     private GravityType gravityType;
     private AButtonTask aButtonTask;
@@ -112,12 +177,15 @@ public class Player extends GameEntity implements IBodyEntity, IHealthEntity, IA
     public Player(@NotNull IGame2D game) {
         super(game);
         eventKeyMask = new ObjectSet<>();
+        jetpackStamina = new JetpackStamina();
+
         timers = new HashMap<>();
         timers.put("shoot_anim", new Timer(SHOOT_ANIMATION_DURATION));
         timers.put("damage", new Timer(DAMAGE_DURATION));
         timers.put("damage_recovery", new Timer(DAMAGE_RECOVERY_TIME));
         timers.put("damage_flash", new Timer(DAMAGE_FLASH_DURATION));
-        timers.put("jetpack", new Timer(JETPACK_DURATION));
+        timers.put("jetdash", new Timer(JETDASH_DURATION));
+        timers.put("brake", new Timer(BRAKE_DURATION));
 
         if (damageNegotiations == null) {
             damageNegotiations = new ObjectMap<>();
@@ -136,8 +204,10 @@ public class Player extends GameEntity implements IBodyEntity, IHealthEntity, IA
             regions.put("run", atlas.findRegion("run"));
             regions.put("slip", atlas.findRegion("slip"));
             regions.put("jump", atlas.findRegion("jump"));
+            regions.put("brake", atlas.findRegion("brake"));
             regions.put("shoot", atlas.findRegion("shoot"));
             regions.put("jetpack", atlas.findRegion("jetpack"));
+            regions.put("jetdash", atlas.findRegion("thrust"));
             regions.put("damaged", atlas.findRegion("damaged"));
             regions.put("jetpackFlame", atlas.findRegion("jetpackFlame"));
         }
@@ -168,7 +238,7 @@ public class Player extends GameEntity implements IBodyEntity, IHealthEntity, IA
                 "up", String.class).toUpperCase());
         enterAreaOfGravityDirection(gravityDirection);
 
-        ObjectSet<String> timersToReset = ObjectSetExtensionsKt.objectSetOf("jetpack");
+        ObjectSet<String> timersToReset = ObjectSetExtensionsKt.objectSetOf("jetdash");
         for (Map.Entry<String, Timer> entry : timers.entrySet()) {
             String key = entry.getKey();
             Timer timer = entry.getValue();
@@ -185,9 +255,13 @@ public class Player extends GameEntity implements IBodyEntity, IHealthEntity, IA
         invincible = false;
         damageFlash = false;
 
+        allowedToJetDash = false;
+
         facing = Facing.RIGHT;
         directionRotation = Direction.UP;
         aButtonTask = AButtonTask.JUMP;
+
+        jetpackStamina.reset();
     }
 
     @Override
@@ -293,6 +367,13 @@ public class Player extends GameEntity implements IBodyEntity, IHealthEntity, IA
 
     private UpdatablesComponent defineUpdatablesComponent() {
         return new UpdatablesComponent(this, delta -> {
+            jetpackStamina.update(delta);
+            float jetpackStaminaRatio = jetpackStamina.getImpulseRatio();
+            ((RocketPartnersGame) getGame()).setDebugText("Jetpack Stamina: " + jetpackStaminaRatio);
+
+            Timer brakeTimer = timers.get("brake");
+            brakeTimer.update(delta);
+
             Timer damageTimer = timers.get("damage");
             Timer damageRecoveryTimer = timers.get("damage_recovery");
 
@@ -318,7 +399,9 @@ public class Player extends GameEntity implements IBodyEntity, IHealthEntity, IA
 
         Behavior jumpBehavior = new Behavior(
                 (delta) -> {
-                    if (isDamaged() || !getGame().getControllerPoller().isPressed(ControllerButton.A)) {
+                    IControllerPoller controllerPoller = getGame().getControllerPoller();
+                    if (isDamaged() || !controllerPoller.isPressed(ControllerButton.A) ||
+                            isBehaviorActive(BehaviorType.JETDASHING)) {
                         return false;
                     }
                     if (isBehaviorActive(BehaviorType.JUMPING)) {
@@ -331,7 +414,7 @@ public class Player extends GameEntity implements IBodyEntity, IHealthEntity, IA
                         };
                     } else {
                         return aButtonTask == AButtonTask.JUMP &&
-                                getGame().getControllerPoller().isJustPressed(ControllerButton.A) &&
+                                controllerPoller.isJustPressed(ControllerButton.A) &&
                                 (BodyExtensions.isBodySensing(getBody(), BodySense.FEET_ON_GROUND) ||
                                         isBehaviorActive(BehaviorType.WALL_SLIDING));
                     }
@@ -351,22 +434,23 @@ public class Player extends GameEntity implements IBodyEntity, IHealthEntity, IA
 
         Behavior jetpackBehavior = new Behavior(
                 (delta) -> {
-                    if (isDamaged() || timers.get("jetpack").isFinished() ||
-                            !getGame().getControllerPoller().isPressed(ControllerButton.A) ||
+                    IControllerPoller controllerPoller = getGame().getControllerPoller();
+                    if (isDamaged() || !jetpackStamina.canImpulse() ||
+                            !controllerPoller.isPressed(ControllerButton.A) ||
                             BodyExtensions.isBodySensing(getBody(), BodySense.FEET_ON_GROUND) ||
-                            isBehaviorActive(BehaviorType.WALL_SLIDING)) {
+                            isAnyBehaviorActive(BehaviorType.WALL_SLIDING, BehaviorType.JETDASHING)) {
                         return false;
                     }
 
                     if (isBehaviorActive(BehaviorType.JETPACKING)) {
-                        return getGame().getControllerPoller().isPressed(ControllerButton.A);
+                        return controllerPoller.isPressed(ControllerButton.A);
                     } else {
-                        return getGame().getControllerPoller().isJustPressed(ControllerButton.A) &&
+                        return controllerPoller.isJustPressed(ControllerButton.A) &&
                                 aButtonTask == AButtonTask.JETPACK;
                     }
                 },
                 () -> {
-                    aButtonTask = AButtonTask.JUMP;
+                    jetpackStamina.setJetpacking(true);
                     getBody().getPhysics().setGravityOn(false);
 
                     Vector2 velocity = getBody().getPhysics().getVelocity();
@@ -377,15 +461,52 @@ public class Player extends GameEntity implements IBodyEntity, IHealthEntity, IA
                     }
                 },
                 (delta) -> {
-                    timers.get("jetpack").update(delta);
-                    getBody().getPhysics().getVelocity().y = JETPACK_IMPULSE * ConstVals.PPM;
+                    jetpackStamina.update(delta);
+                    PhysicsData physicsData = getBody().getPhysics();
+                    physicsData.getVelocity().y = JETPACK_IMPULSE * ConstVals.PPM;
                 },
                 () -> {
+                    jetpackStamina.setJetpacking(false);
                     getBody().getPhysics().setGravityOn(true);
-                    timers.get("jetpack").reset();
                 }
         );
         behaviorsComponent.addBehavior(BehaviorType.JETPACKING, jetpackBehavior);
+
+        Behavior jetdashBehavior = new Behavior(
+                (delta) -> {
+                    IControllerPoller controllerPoller = getGame().getControllerPoller();
+                    Timer jetdashTimer = timers.get("jetdash");
+                    if (!isAllowedToJetDash() || jetdashTimer.isFinished() || isDamaged() ||
+                            !controllerPoller.isPressed(ControllerButton.Y) ||
+                            BodyExtensions.isBodySensing(getBody(), BodySense.FEET_ON_GROUND) ||
+                            isBehaviorActive(BehaviorType.WALL_SLIDING)) {
+                        return false;
+                    }
+                    return isBehaviorActive(BehaviorType.JETDASHING) ||
+                            controllerPoller.isJustPressed(ControllerButton.Y);
+                },
+                () -> {
+                    PhysicsData physicsData = getBody().getPhysics();
+                    physicsData.setGravityOn(false);
+                    physicsData.setVelocity(new Vector2(JETDASH_IMPULSE * ConstVals.PPM * facing.getValue(), 0f));
+                },
+                (delta) -> {
+                    Timer jetdashTimer = timers.get("jetdash");
+                    jetdashTimer.update(delta);
+                    PhysicsData physicsData = getBody().getPhysics();
+                    physicsData.setVelocity(new Vector2(JETDASH_IMPULSE * ConstVals.PPM * facing.getValue(), 0f));
+                },
+                () -> {
+                    Timer jetdashTimer = timers.get("jetdash");
+                    jetdashTimer.reset();
+                    PhysicsData physicsData = getBody().getPhysics();
+                    physicsData.setGravityOn(true);
+                    setAllowedToJetDash(false);
+                    Timer brakeTimer = timers.get("brake");
+                    brakeTimer.reset();
+                }
+        );
+        behaviorsComponent.addBehavior(BehaviorType.JETDASHING, jetdashBehavior);
 
         return behaviorsComponent;
     }
@@ -450,7 +571,15 @@ public class Player extends GameEntity implements IBodyEntity, IHealthEntity, IA
 
         Supplier<String> keySupplier = () -> {
             if (!BodyExtensions.isBodySensing(getBody(), BodySense.FEET_ON_GROUND)) {
-                return "jump";
+                if (isBehaviorActive(BehaviorType.JETDASHING)) {
+                    return "jetdash";
+                }
+                Timer brakeTimer = timers.get("brake");
+                if (brakeTimer.isFinished()) {
+                    return "jump";
+                } else {
+                    return "brake";
+                }
             }
             if (running) {
                 return "run";
@@ -466,6 +595,8 @@ public class Player extends GameEntity implements IBodyEntity, IHealthEntity, IA
         animations.put("stand", new Animation(regions.get("stand")));
         animations.put("jump", new Animation(regions.get("jump")));
         animations.put("run", new Animation(regions.get("run"), 2, 2, 0.175f, true));
+        animations.put("jetdash", new Animation(regions.get("jetdash"), 2, 2, 0.05f, false));
+        animations.put("brake", new Animation(regions.get("brake"), 1, 2, 0.1f, false));
         animations.put("slip", new Animation(regions.get("slip")));
         animations.put("stand-shoot", new Animation(regions.get("stand-shoot")));
 

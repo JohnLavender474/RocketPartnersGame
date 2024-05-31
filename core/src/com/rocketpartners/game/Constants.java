@@ -11,6 +11,7 @@ public class Constants {
     public static class ConstKeys {
         public static final String GAME = "game";
         public static final String BACKGROUND = "background";
+        public static final String UI = "ui";
         public static final String BACKGROUNDS = "backgrounds";
         public static final String PLAYER = "player";
         public static final String SPAWNS = "spawns";
@@ -50,6 +51,7 @@ public class Constants {
         public static final int MAX_HEALTH = 30;
         public static final int MIN_HEALTH = 0;
         public static final long PATHFINDER_TIMEOUT = 10;
+        public static final int FONT_SIZE = 16;
         public static final TimeUnit PATHFINDER_TIMEOUT_UNIT = TimeUnit.MILLISECONDS;
     }
 

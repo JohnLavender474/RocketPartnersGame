@@ -57,15 +57,16 @@ public class ContactListener implements IContactListener {
         IFixture blockFixture = fixtures.component2();
 
         BodyExtensions.setBodySense(feetFixture.getBody(), BodySense.FEET_ON_GROUND, true);
-
-        /*
+/*
         Vector2 posDelta = BodyExtensions.getPriorPosition(blockFixture.getBody());
         feetFixture.getBody().translation(posDelta);
-         */
+
+ */
 
         IGameEntity entity = FixtureExtensions.getEntity(feetFixture);
         if (entity instanceof Player player) {
             player.setAButtonTask(Player.AButtonTask.JUMP);
+            player.setAllowedToJetDash(true);
         }
     }
 }
