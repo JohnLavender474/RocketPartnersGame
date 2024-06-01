@@ -30,7 +30,7 @@ public class CameraManagerForRooms implements Updatable, Resettable {
     private static final float DELAY_DURATION = 0.35f;
     private static final float TRANS_DURATION = 1f;
     private static final float DISTANCE_ON_TRANS = 1.5f;
-    private static final float INTERPOLATION_SCALAR = 8f;
+    private static final float INTERPOLATION_SCALAR = 5f;
 
     private final Camera camera;
     private final Timer delayTimer;

@@ -28,6 +28,8 @@ import com.engine.controller.buttons.ButtonActuator;
 import com.engine.controller.polling.IControllerPoller;
 import com.engine.damage.IDamageable;
 import com.engine.damage.IDamager;
+import com.engine.drawables.fonts.BitmapFontHandle;
+import com.engine.drawables.fonts.FontsComponent;
 import com.engine.drawables.shapes.DrawableShapesComponent;
 import com.engine.drawables.shapes.IDrawableShape;
 import com.engine.drawables.sorting.DrawingPriority;
@@ -48,6 +50,8 @@ import com.rocketpartners.game.assets.SpriteSheetAsset;
 import com.rocketpartners.game.behaviors.BehaviorType;
 import com.rocketpartners.game.controllers.ControllerButton;
 import com.rocketpartners.game.damage.DamageNegotation;
+import com.rocketpartners.game.drawables.BitmapFontHandleUtils;
+import com.rocketpartners.game.drawables.DrawingPriorities;
 import com.rocketpartners.game.entities.contracts.IDirectionRotatable;
 import com.rocketpartners.game.entities.contracts.IGravityListener;
 import com.rocketpartners.game.entities.contracts.IHealthEntity;
@@ -68,8 +72,8 @@ import static com.rocketpartners.game.Constants.ConstVals;
 @Getter
 @Setter
 public class Player extends GameEntity implements IBodyEntity, IHealthEntity, IAudioEntity, ISpritesEntity,
-        IAnimatedEntity, IBehaviorsEntity, IEventListener, IDamageable, IFaceable, IBoundsSupplier, IDirectionRotatable,
-        IGravityListener {
+        IAnimatedEntity, IFontsEntity, IBehaviorsEntity, IEventListener, IDamageable, IFaceable, IBoundsSupplier,
+        IDirectionRotatable, IGravityListener {
 
     public enum AButtonTask {
         JUMP,
@@ -78,7 +82,7 @@ public class Player extends GameEntity implements IBodyEntity, IHealthEntity, IA
 
     public static class JetpackStamina implements Updatable, Resettable {
 
-        public static final float JETPACK_THRUST_DURATION = 5f;
+        public static final float JETPACK_THRUST_DURATION = 30f;
         public static final float JETPACK_RECOVERY_DELAY = 0.1f;
         public static final float JETPACK_RECOVERY_RATE = 4f;
 
@@ -112,12 +116,16 @@ public class Player extends GameEntity implements IBodyEntity, IHealthEntity, IA
             if (jetpacking) {
                 thrustTime += delta;
                 thrustTime = Math.min(JETPACK_THRUST_DURATION, thrustTime);
-            } else {
+            }
+            // TODO: the folliwng code recharges the jetpack stamina
+            /*
+            else {
                 jetpackRecoveryDelayTimer.update(delta);
                 if (jetpackRecoveryDelayTimer.isFinished()) {
                     thrustTime = Math.max(0f, thrustTime - JETPACK_RECOVERY_RATE * delta);
                 }
             }
+            */
         }
 
         @Override
@@ -215,6 +223,7 @@ public class Player extends GameEntity implements IBodyEntity, IHealthEntity, IA
         addComponent(defineBodyComponent());
         addComponent(defineBehaviorsComponent());
         addComponent(defineUpdatablesComponent());
+        addComponent(defineFontsComponent());
         addComponent(defineSpritesComponent());
         addComponent(defineAnimationsComponent());
         addComponent(definePointsComponent());
@@ -332,6 +341,13 @@ public class Player extends GameEntity implements IBodyEntity, IHealthEntity, IA
         feetFixture.getRawShape().setColor(Color.GREEN);
         debugShapesSupplier.add(feetFixture::getShape);
 
+        Fixture headFixture = Fixture.Companion.createFixture(body, FixtureType.HEAD,
+                new GameRectangle().setSize(0.6f * ConstVals.PPM, 0.1f * ConstVals.PPM));
+        headFixture.getOffsetFromBodyCenter().y = 0.625f * ConstVals.PPM;
+        body.addFixture(headFixture);
+        headFixture.getRawShape().setColor(Color.RED);
+        debugShapesSupplier.add(headFixture::getShape);
+
         Fixture leftFixture = Fixture.Companion.createFixture(body, FixtureType.SIDE,
                 new GameRectangle().setSize(0.1f * ConstVals.PPM, 0.5f * ConstVals.PPM));
         leftFixture.putProperty(ConstKeys.SIDE_TYPE, ConstKeys.LEFT);
@@ -347,8 +363,6 @@ public class Player extends GameEntity implements IBodyEntity, IHealthEntity, IA
         body.addFixture(rightFixture);
         rightFixture.getRawShape().setColor(Color.YELLOW);
         debugShapesSupplier.add(rightFixture::getShape);
-
-        // TODO: define other fixtures
 
         body.getPreProcess().put(ConstKeys.DEFAULT, delta -> {
             float gravity;
@@ -382,8 +396,6 @@ public class Player extends GameEntity implements IBodyEntity, IHealthEntity, IA
     private UpdatablesComponent defineUpdatablesComponent() {
         return new UpdatablesComponent(this, delta -> {
             jetpackStamina.update(delta);
-            float jetpackStaminaRatio = jetpackStamina.getImpulseRatio();
-            ((RocketPartnersGame) getGame()).setDebugText("Jetpack Stamina: " + jetpackStaminaRatio);
 
             Timer brakeTimer = timers.get("brake");
             brakeTimer.update(delta);
@@ -426,9 +438,7 @@ public class Player extends GameEntity implements IBodyEntity, IHealthEntity, IA
                             controllerPoller.isPressed(ControllerButton.RIGHT);
                     return left || right;
                 },
-                () -> {
-                    aButtonTask = AButtonTask.JUMP;
-                },
+                () -> aButtonTask = AButtonTask.JUMP,
                 (delta) -> getBody().getPhysics().getFrictionOnSelf().y += 1.2f,
                 () -> aButtonTask = AButtonTask.JETPACK
         );
@@ -438,7 +448,8 @@ public class Player extends GameEntity implements IBodyEntity, IHealthEntity, IA
                 (delta) -> {
                     IControllerPoller controllerPoller = getGame().getControllerPoller();
                     if (isDamaged() || !controllerPoller.isPressed(ControllerButton.A) ||
-                            isBehaviorActive(BehaviorType.JETDASHING)) {
+                            isBehaviorActive(BehaviorType.JETDASHING) || BodyExtensions.isBodySensing(getBody(),
+                            BodySense.HEAD_TOUCHING_BLOCK)) {
                         return false;
                     }
                     if (isBehaviorActive(BehaviorType.JUMPING)) {
@@ -563,11 +574,22 @@ public class Player extends GameEntity implements IBodyEntity, IHealthEntity, IA
         return behaviorsComponent;
     }
 
+    private FontsComponent defineFontsComponent() {
+        BitmapFontHandle jetpackFont = BitmapFontHandleUtils.create(() -> {
+            float jetpackStaminaRatio = jetpackStamina.getImpulseRatio();
+            return "Jetpack: " + (100 - (int) (jetpackStaminaRatio * 100));
+        });
+        jetpackFont.getPosition().set(3f * ConstVals.PPM, 5f * ConstVals.PPM);
+        return new FontsComponent(this, new Pair<>("jetpack", jetpackFont));
+    }
+
     private SpritesComponent defineSpritesComponent() {
-        GameSprite playerSprite = new GameSprite(new DrawingPriority(DrawingSection.FOREGROUND, 1), false);
+        GameSprite playerSprite = new GameSprite(new DrawingPriority(DrawingSection.PLAYGROUND,
+                DrawingPriorities.PLAYER), false);
         playerSprite.setSize(2.475f * ConstVals.PPM, 1.875f * ConstVals.PPM);
 
-        GameSprite jetpackFlameSprite = new GameSprite(new DrawingPriority(DrawingSection.FOREGROUND, 0), false);
+        GameSprite jetpackFlameSprite = new GameSprite(new DrawingPriority(DrawingSection.PLAYGROUND,
+                DrawingPriorities.PLAYER - 1), false);
         jetpackFlameSprite.setSize(1f * ConstVals.PPM, 1f * ConstVals.PPM);
 
         SpritesComponent spritesComponent = new SpritesComponent(this,

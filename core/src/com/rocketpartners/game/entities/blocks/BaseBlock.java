@@ -17,6 +17,7 @@ import com.engine.entities.contracts.IDrawableShapesEntity;
 import com.engine.world.Body;
 import com.engine.world.BodyComponent;
 import com.engine.world.BodyType;
+import com.engine.world.IFixture;
 import com.rocketpartners.game.Constants;
 import com.rocketpartners.game.cullables.CullablesUtils;
 import com.rocketpartners.game.world.BodyComponentCreator;
@@ -76,5 +77,17 @@ public class BaseBlock extends GameEntity implements IBodyEntity, IDrawableShape
     protected BodyComponent defineBodyComponent() {
         Body body = Body.Companion.createBody(bodyType);
         return BodyComponentCreator.create(this, body);
+    }
+
+    public void hitByHead(@NotNull IFixture headFixture) {
+        // Do nothing
+    }
+
+    public void hitBySide(@NotNull IFixture sideFixture) {
+        // Do nothing
+    }
+
+    public void hitByFeet(@NotNull IFixture feetFixture) {
+        // Do nothing
     }
 }

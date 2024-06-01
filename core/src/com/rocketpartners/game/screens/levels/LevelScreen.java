@@ -7,7 +7,6 @@ import com.badlogic.gdx.graphics.glutils.ShapeRenderer;
 import com.badlogic.gdx.maps.MapProperties;
 import com.badlogic.gdx.maps.objects.RectangleMapObject;
 import com.badlogic.gdx.math.Vector3;
-import com.badlogic.gdx.scenes.scene2d.Stage;
 import com.badlogic.gdx.utils.*;
 import com.engine.IGame2D;
 import com.engine.IGameEngine;
@@ -33,7 +32,6 @@ import com.engine.spawns.SpawnsManager;
 import com.engine.systems.IGameSystem;
 import com.engine.updatables.UpdatablesSystem;
 import com.engine.world.WorldSystem;
-import com.rocketpartners.game.Constants;
 import com.rocketpartners.game.RocketPartnersGame;
 import com.rocketpartners.game.assets.MusicAsset;
 import com.rocketpartners.game.assets.SoundAsset;
@@ -53,7 +51,6 @@ import org.jetbrains.annotations.NotNull;
 
 import java.util.PriorityQueue;
 
-import static com.rocketpartners.game.Constants.*;
 import static com.rocketpartners.game.Constants.ConstKeys;
 import static com.rocketpartners.game.Constants.ConstVals;
 
@@ -277,7 +274,7 @@ public class LevelScreen extends TiledMapLevelScreen {
         }
 
         float gameCamDeltaX = gameCamera.position.x - gameCamPriorPos.x;
-        backgroundCamera.position.x += gameCamDeltaX * 0.5f; // TODO: replace with background parallax factor field
+        backgroundCamera.position.x += gameCamDeltaX * 0.5f;
         gameCamPriorPos.set(gameCamera.position);
 
         engine.update(delta);
@@ -288,25 +285,28 @@ public class LevelScreen extends TiledMapLevelScreen {
         batch.setProjectionMatrix(backgroundCamera.combined);
         backgrounds.forEach(background -> background.draw(batch));
 
-        batch.setProjectionMatrix(gameCamera.combined);
-        PriorityQueue<IComparableDrawable<Batch>> backgroundSprites = drawables.get(DrawingSection.BACKGROUND);
-        while (!backgroundSprites.isEmpty()) {
-            IComparableDrawable<Batch> backgroundSprite = backgroundSprites.poll();
+        PriorityQueue<IComparableDrawable<Batch>> backgroundDrawables = drawables.get(DrawingSection.BACKGROUND);
+        while (!backgroundDrawables.isEmpty()) {
+            IComparableDrawable<Batch> backgroundSprite = backgroundDrawables.poll();
             backgroundSprite.draw(batch);
         }
+
+        batch.setProjectionMatrix(gameCamera.combined);
 
         assert getTiledMapLevelRenderer() != null;
         getTiledMapLevelRenderer().render((OrthographicCamera) gameCamera);
 
-        PriorityQueue<IComparableDrawable<Batch>> gameGroundSprites = drawables.get(DrawingSection.PLAYGROUND);
-        while (!gameGroundSprites.isEmpty()) {
-            IComparableDrawable<Batch> gameGroundSprite = gameGroundSprites.poll();
+        PriorityQueue<IComparableDrawable<Batch>> gameGroundDrawables = drawables.get(DrawingSection.PLAYGROUND);
+        while (!gameGroundDrawables.isEmpty()) {
+            IComparableDrawable<Batch> gameGroundSprite = gameGroundDrawables.poll();
             gameGroundSprite.draw(batch);
         }
 
-        PriorityQueue<IComparableDrawable<Batch>> gameSprites = drawables.get(DrawingSection.FOREGROUND);
-        while (!gameSprites.isEmpty()) {
-            IComparableDrawable<Batch> gameSprite = gameSprites.poll();
+        batch.setProjectionMatrix(uiCamera.combined);
+
+        PriorityQueue<IComparableDrawable<Batch>> foregroundDrawables = drawables.get(DrawingSection.FOREGROUND);
+        while (!foregroundDrawables.isEmpty()) {
+            IComparableDrawable<Batch> gameSprite = foregroundDrawables.poll();
             gameSprite.draw(batch);
         }
 

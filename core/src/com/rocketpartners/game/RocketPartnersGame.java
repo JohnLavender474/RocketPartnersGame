@@ -58,7 +58,7 @@ import com.rocketpartners.game.events.EventType;
 import com.rocketpartners.game.screens.ScreenEnum;
 import com.rocketpartners.game.screens.levels.LevelEnum;
 import com.rocketpartners.game.screens.levels.LevelScreen;
-import com.rocketpartners.game.utils.BitmapFontHandleUtils;
+import com.rocketpartners.game.drawables.BitmapFontHandleUtils;
 import com.rocketpartners.game.world.CollisionHandler;
 import com.rocketpartners.game.world.ContactListener;
 import com.rocketpartners.game.world.FixtureType;
@@ -80,7 +80,7 @@ import static com.rocketpartners.game.Constants.ConstVals;
 public final class RocketPartnersGame extends Game2D implements IEventListener {
 
     public static final boolean DEBUG_SHAPES = true;
-    public static final boolean DEBUG_TEXT = true;
+    public static final boolean DEBUG_TEXT = false;
 
     private ShapeRenderer shapeRenderer;
     private SpriteBatch batch;
@@ -171,7 +171,7 @@ public final class RocketPartnersGame extends Game2D implements IEventListener {
 
     private static IGameEngine createEngine(RocketPartnersGame game) {
         ObjectMap<Object, ObjectSet<Object>> worldFilterMap = new ObjectMap<>();
-        worldFilterMap.put(FixtureType.WORLD_BLOCK, objectSetOf(FixtureType.FEET, FixtureType.SIDE));
+        worldFilterMap.put(FixtureType.WORLD_BLOCK, objectSetOf(FixtureType.FEET, FixtureType.SIDE, FixtureType.HEAD));
         worldFilterMap.put(FixtureType.PLAYER, objectSetOf(FixtureType.ITEM));
         worldFilterMap.put(FixtureType.DAMAGEABLE, objectSetOf(FixtureType.DAMAGER));
 
