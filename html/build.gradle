@@ -8,12 +8,22 @@ gwt {
     devModules 'com.rocketpartners.game.GdxDefinitionSuperdev'
     project.webAppDirName = 'webapp'
 
-    compiler {
-        strict = true;
-        disableCastChecking = true;
-    }
+    compiler(({
+        strict = true
+        disableCastChecking = true
+    } as Closure<GwtCompileOptions>))
 }
 
+dependencies {
+    implementation project(":core")
+    implementation "com.badlogicgames.gdx:gdx-backend-gwt:$gdxVersion"
+    implementation "com.badlogicgames.gdx:gdx:$gdxVersion:sources"
+    implementation "com.badlogicgames.gdx:gdx-backend-gwt:$gdxVersion:sources"
+    implementation "com.google.jsinterop:jsinterop-annotations:2.0.2:sources"
+    implementation "org.jetbrains.kotlin:kotlin-stdlib-jdk8:$kotlin_version"
+}
+
+import org.docstr.gradle.plugins.gwt.GwtCompileOptions
 import org.docstr.gradle.plugins.gwt.GwtSuperDev
 import org.akhikhl.gretty.AppBeforeIntegrationTestTask
 
@@ -38,7 +48,8 @@ tasks.register('startHttpServer') {
     }
 }
 
-task beforeRun(type: AppBeforeIntegrationTestTask, dependsOn: startHttpServer) {
+tasks.register('beforeRun', AppBeforeIntegrationTestTask) {
+    dependsOn startHttpServer
     // The next line allows ports to be reused instead of
     // needing a process to be manually terminated.
     file("build/TEMP_PORTS.properties").delete()

@@ -1,4 +1,4 @@
-player.png
+player-16bit.png
 size: 128, 832
 format: RGBA8888
 filter: Nearest,Nearest

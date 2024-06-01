@@ -4,6 +4,7 @@ import com.badlogic.gdx.Gdx;
 import com.badlogic.gdx.assets.AssetManager;
 import com.badlogic.gdx.audio.Music;
 import com.badlogic.gdx.audio.Sound;
+import com.badlogic.gdx.graphics.GL20;
 import com.badlogic.gdx.graphics.g2d.Batch;
 import com.badlogic.gdx.graphics.g2d.SpriteBatch;
 import com.badlogic.gdx.graphics.glutils.ShapeRenderer;
@@ -20,7 +21,6 @@ import com.engine.animations.AnimationsSystem;
 import com.engine.audio.AudioSystem;
 import com.engine.behaviors.BehaviorsSystem;
 import com.engine.common.extensions.AssetManagerExtensionsKt;
-import com.engine.common.extensions.ObjectSetExtensionsKt;
 import com.engine.common.objects.MultiCollectionIterable;
 import com.engine.controller.ControllerSystem;
 import com.engine.controller.buttons.Buttons;
@@ -71,8 +71,9 @@ import java.util.PriorityQueue;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
 
-import static com.engine.common.extensions.ObjectSetExtensionsKt.*;
-import static com.rocketpartners.game.Constants.*;
+import static com.engine.common.extensions.ObjectSetExtensionsKt.objectSetOf;
+import static com.rocketpartners.game.Constants.ConstKeys;
+import static com.rocketpartners.game.Constants.ConstVals;
 
 @Getter
 @Setter
@@ -229,6 +230,8 @@ public final class RocketPartnersGame extends Game2D implements IEventListener {
     }
 
     public void render() {
+        Gdx.gl20.glClearColor(0.1f, 0.1f, 0.1f, 1.0f);
+        Gdx.graphics.getGL20().glClear(GL20.GL_COLOR_BUFFER_BIT);
         super.render();
         float delta = Gdx.graphics.getDeltaTime();
         audioMan.update(delta);

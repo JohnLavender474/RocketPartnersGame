@@ -197,7 +197,7 @@ public class Player extends GameEntity implements IBodyEntity, IHealthEntity, IA
         if (regions == null) {
             regions = new HashMap<>();
             TextureAtlas atlas = getGame().getAssMan().get(
-                    SpriteSheetAsset.PLAYER_SPRITE_SHEET.getSource(), TextureAtlas.class);
+                    SpriteSheetAsset.PLAYER_8BIT_SPRITE_SHEET.getSource(), TextureAtlas.class);
             regions.put("stand", atlas.findRegion("stand"));
             regions.put("stand-shoot", atlas.findRegion("stand-shoot"));
             regions.put("run", atlas.findRegion("run"));
@@ -606,13 +606,13 @@ public class Player extends GameEntity implements IBodyEntity, IHealthEntity, IA
                 float rotation = directionRotation.getRotation();
                 gameSprite.setRotation(rotation);
                 gameSprite.setFlip(false, false);
-                facingOffset = -0.45f;
+                facingOffset = -0.5f;
                 verticalOffset = -0.25f;
             } else {
                 gameSprite.setRotation(270f);
                 gameSprite.setFlip(facing == Facing.LEFT, false);
-                facingOffset = -0.65f;
-                verticalOffset = 0.1f;
+                facingOffset = -0.75f;
+                verticalOffset = -0.1f;
             }
             facingOffset *= facing.getValue();
 
@@ -669,8 +669,8 @@ public class Player extends GameEntity implements IBodyEntity, IHealthEntity, IA
         animations.put("jump", new Animation(regions.get("jump")));
         animations.put("run", new Animation(regions.get("run"), 2, 2, 0.175f, true));
         animations.put("wallslide", new Animation(regions.get("wallslide")));
-        animations.put("jetdash", new Animation(regions.get("jetdash"), 2, 2, 0.05f, false));
-        animations.put("brake", new Animation(regions.get("brake"), 1, 2, 0.1f, false));
+        animations.put("jetdash", new Animation(regions.get("jetdash"), 1, 3, 0.05f, false));
+        animations.put("brake", new Animation(regions.get("brake")));
         animations.put("slip", new Animation(regions.get("slip")));
         animations.put("stand-shoot", new Animation(regions.get("stand-shoot")));
 
@@ -681,7 +681,7 @@ public class Player extends GameEntity implements IBodyEntity, IHealthEntity, IA
 
     private Pair<Function0<GameSprite>, IAnimator> defineJetpackFlameSpriteAnimator() {
         GameSprite jetpackFlameSprite = getSprites().get("jetpackFlame");
-        Animation animation = new Animation(regions.get("jetpackFlame"), 4, 1, 0.1f, true);
+        Animation animation = new Animation(regions.get("jetpackFlame"), 1, 3, 0.1f, true);
         Animator animator = new Animator(animation);
         return new Pair<>(() -> jetpackFlameSprite, animator);
     }

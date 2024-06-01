@@ -8,7 +8,7 @@ import org.jetbrains.annotations.NotNull;
 
 @RequiredArgsConstructor(access = AccessLevel.PRIVATE)
 public enum SpriteSheetAsset implements IAsset {
-    PLAYER_SPRITE_SHEET("player.txt");
+    PLAYER_8BIT_SPRITE_SHEET("player-8bit.txt");
 
     public static final String SPRITE_SHEET_ASSET_PREFIX = "sprites/sprite_sheets/";
 
